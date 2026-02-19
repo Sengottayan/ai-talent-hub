@@ -1,0 +1,12 @@
+
+Charlie Brown
+Role: Data Analyst
+Email: charlie@example.com
+Phone: 555-0100
+
+Experience: 2.5 years
+
+Skills:
+- Python
+- Machine Learning
+    

@@ -1,0 +1,597 @@
+import { useState, useEffect } from "react";
+import {
+  CheckCircle,
+  XCircle,
+  Star,
+  MessageSquare,
+  Award,
+  TrendingUp,
+  Loader2,
+  Filter,
+  FileText,
+  History,
+  AlertTriangle,
+  Clock,
+  User,
+  Bot
+} from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+
+import { Progress } from "@/components/ui/progress";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import api from "@/lib/api";
+
+interface InterviewResult {
+  _id: string;
+  interview_id: string;
+  email: string;
+  candidate_id: string;
+  candidate_name: string;
+  role?: string;
+  interviewDate?: string;
+  scores: Record<string, number>;
+  totalScore: number;
+  maxTotalScore: number;
+  evaluation_summary: string;
+  strengths: string[];
+  improvements: string[];
+  decision: "pending" | "selected" | "rejected" | "on-hold";
+  violationCount?: number;
+  antiCheatingState?: {
+    totalEvents?: number;
+    autoTerminated?: boolean;
+    finalScore?: number;
+  };
+  conversationTranscript?: {
+    role: string;
+    content: string;
+    timestamp: string;
+  }[];
+  responses?: {
+    question: string;
+    answer: string;
+    timestamp?: string;
+  }[];
+}
+
+export default function InterviewResults() {
+  const [results, setResults] = useState<InterviewResult[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [filterInterviewId, setFilterInterviewId] = useState<string>("");
+  const { toast } = useToast();
+
+  // Modal State
+  const [selectedResult, setSelectedResult] = useState<InterviewResult | null>(null);
+  const [isTranscriptOpen, setIsTranscriptOpen] = useState(false);
+  const [isViolationsOpen, setIsViolationsOpen] = useState(false);
+  const [violationEvents, setViolationEvents] = useState<any[]>([]);
+  const [loadingEvents, setLoadingEvents] = useState(false);
+
+  const fetchResults = async (interviewId?: string) => {
+    setIsLoading(true);
+    try {
+      const url = interviewId
+        ? `/interviews/results/${interviewId}`
+        : `/interviews/results/all`;
+      const { data } = await api.get(url);
+
+      const mappedResults = data.map((r: any) => {
+        const scoresValues = Object.values(r.scores || {}) as number[];
+        const total = scoresValues.reduce((a, b) => a + b, 0);
+        return {
+          ...r,
+          totalScore: total,
+          maxTotalScore: scoresValues.length * 10 || 50
+        };
+      });
+      setResults(mappedResults);
+    } catch (error) {
+      console.error("Error fetching results:", error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch interview results",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchViolationEvents = async (interviewId: string, email: string) => {
+    setLoadingEvents(true);
+    try {
+      const { data } = await api.get(`/interviews/anti-cheating-events/${interviewId}/${email}`);
+      if (data.success) {
+        setViolationEvents(data.data);
+      }
+    } catch (error) {
+      console.error("Error fetching violations:", error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch violation logs",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingEvents(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchResults();
+  }, []);
+
+  const handleDecision = async (id: string, candidate_id: string, interview_id: string, decision: "selected" | "rejected") => {
+    try {
+      await api.post(`/interviews/results`, {
+        interview_id,
+        candidate_id,
+        decision
+      });
+
+      setResults((prev) =>
+        prev.map((r) => (r._id === id ? { ...r, decision } : r))
+      );
+
+      toast({
+        title: `Candidate ${decision.charAt(0).toUpperCase() + decision.slice(1)}`,
+        description: `The candidate status has been updated to ${decision}.`,
+        variant: decision === "rejected" ? "destructive" : "default",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update decision",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const openTranscript = (result: InterviewResult) => {
+    setSelectedResult(result);
+    setIsTranscriptOpen(true);
+  };
+
+  const openViolations = (result: InterviewResult) => {
+    setSelectedResult(result);
+    setIsViolationsOpen(true);
+    fetchViolationEvents(result.interview_id, result.email);
+  };
+
+  const getScoreColor = (score: number, maxScore: number) => {
+    const percentage = (score / maxScore) * 100;
+    if (percentage >= 80) return "text-success";
+    if (percentage >= 60) return "text-primary";
+    return "text-warning";
+  };
+
+  const pendingCount = results.filter(r => r.decision === 'pending').length;
+  const selectedCount = results.filter(r => r.decision === 'selected').length;
+  const rejectedCount = results.filter(r => r.decision === 'rejected').length;
+
+  return (
+    <div className="space-y-8 animate-fade-in">
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Interview Results</h1>
+          <p className="mt-1 text-muted-foreground">
+            Review detailed AI assessments and finalize hiring decisions
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Filter className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Filter by Interview ID..."
+              className="h-10 rounded-md border border-input bg-background pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              value={filterInterviewId}
+              onChange={(e) => setFilterInterviewId(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && fetchResults(filterInterviewId)}
+            />
+          </div>
+          <Button onClick={() => fetchResults(filterInterviewId)}>Apply</Button>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardContent className="flex items-center gap-4 p-6">
+            <div className="rounded-lg bg-warning/10 p-3">
+              <Star className="h-6 w-6 text-warning" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-foreground">{pendingCount}</p>
+              <p className="text-sm text-muted-foreground">Pending Decision</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="flex items-center gap-4 p-6">
+            <div className="rounded-lg bg-success/10 p-3">
+              <Award className="h-6 w-6 text-success" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-foreground">{selectedCount}</p>
+              <p className="text-sm text-muted-foreground">Selected</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="flex items-center gap-4 p-6">
+            <div className="rounded-lg bg-destructive/10 p-3">
+              <XCircle className="h-6 w-6 text-destructive" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-foreground">{rejectedCount}</p>
+              <p className="text-sm text-muted-foreground">Rejected</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Results */}
+      <div className="space-y-6 pb-12">
+        {results.length > 0 ? (
+          results.map((result) => (
+            <Card key={result._id} className="overflow-hidden border-border shadow-sm transition-shadow hover:shadow-md">
+              <CardHeader className="border-b border-border bg-muted/20">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-lg font-bold text-primary">
+                      {result.candidate_name.split(" ").map((n) => n[0]).join("")}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <CardTitle className="text-xl">{result.candidate_name}</CardTitle>
+                      </div>
+                      <CardDescription>
+                        Interview ID: <span className="font-mono text-xs">{result.interview_id}</span>
+                        <span className="mx-2">•</span>
+                        {result.email}
+                      </CardDescription>
+                    </div>
+                  </div>
+                  <div className="text-right flex items-center gap-4">
+                    <div className="space-y-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full text-xs flex items-center gap-2"
+                        onClick={() => openTranscript(result)}
+                      >
+                        <FileText className="w-3 h-3" />
+                        View Transcript
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full text-xs flex items-center gap-2 border-amber-200 hover:bg-amber-50"
+                        onClick={() => openViolations(result)}
+                      >
+                        <AlertTriangle className="w-3 h-3 text-amber-600" />
+                        Violations Log
+                      </Button>
+                    </div>
+                    <div className="bg-white p-2 rounded-lg border border-border min-w-[80px]">
+                      <p className="text-2xl font-bold text-foreground">
+                        {result.totalScore}/{result.maxTotalScore}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">Final Score</p>
+                    </div>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="grid gap-8 lg:grid-cols-2">
+                  <div className="space-y-6">
+                    {/* Skill Scores */}
+                    <div className="space-y-4">
+                      <h4 className="flex items-center gap-2 font-semibold text-foreground">
+                        <TrendingUp className="h-4 w-4" />
+                        Assessment Scores
+                      </h4>
+                      <div className="space-y-4">
+                        {Object.entries(result.scores || {}).map(([skill, score]) => (
+                          <div key={skill} className="space-y-1.5">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">{skill}</span>
+                              <span className={`font-semibold ${getScoreColor(score, 10)}`}>
+                                {score}/10
+                              </span>
+                            </div>
+                            <Progress value={score * 10} className="h-2" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Integrity Logs Summary */}
+                    <div className="space-y-4 pt-4 border-t border-border/50">
+                      <h4 className="flex items-center gap-2 font-semibold text-foreground">
+                        <Award className={`h-4 w-4 ${(result.violationCount || 0) > 5 ? 'text-destructive' : 'text-success'}`} />
+                        Integrity Summary
+                      </h4>
+                      <div className={`rounded-xl border ${(result.violationCount || 0) > 5 ? 'border-destructive/20 bg-destructive/5' : 'border-success/20 bg-success/5'} p-4`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium text-slate-700">Suspicion Level</span>
+                          <span className={`text-lg font-bold ${(result.violationCount || 0) > 5 ? 'text-destructive' : 'text-success'}`}>
+                            {result.violationCount || 0} / 10
+                          </span>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
+                            <span>Focus Loss Events</span>
+                            <span className="text-slate-900">{result.antiCheatingState?.totalEvents || 0} times</span>
+                          </div>
+                          <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <span>Status</span>
+                            <span className={result.antiCheatingState?.autoTerminated ? 'text-destructive font-bold' : 'text-success font-bold'}>
+                              {result.antiCheatingState?.autoTerminated ? 'AUTO-TERMINATED' : 'Completed Normally'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* AI Analysis */}
+                  <div className="space-y-6">
+                    <div className="space-y-3">
+                      <h4 className="flex items-center gap-2 font-semibold text-foreground">
+                        <MessageSquare className="h-4 w-4" />
+                        Evaluation Summary
+                      </h4>
+                      <div className="rounded-xl border border-border bg-muted/30 p-4 text-sm leading-relaxed text-muted-foreground">
+                        {result.evaluation_summary}
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2 rounded-lg bg-success/5 p-3 border border-success/10">
+                        <h5 className="flex items-center gap-1 text-sm font-semibold text-success">
+                          <CheckCircle className="h-4 w-4" />
+                          Strengths
+                        </h5>
+                        <ul className="space-y-1">
+                          {result.strengths?.map((s, i) => (
+                            <li key={i} className="text-xs text-muted-foreground flex items-top gap-1.5">
+                              <span className="block h-1 w-1 rounded-full bg-success mt-1.5 shrink-0" />
+                              {s}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="space-y-2 rounded-lg bg-warning/5 p-3 border border-warning/10">
+                        <h5 className="flex items-center gap-1 text-sm font-semibold text-warning">
+                          <TrendingUp className="h-4 w-4" />
+                          Key Improvements
+                        </h5>
+                        <ul className="space-y-1">
+                          {result.improvements?.map((s, i) => (
+                            <li key={i} className="text-xs text-muted-foreground flex items-top gap-1.5">
+                              <span className="block h-1 w-1 rounded-full bg-warning mt-1.5 shrink-0" />
+                              {s}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+
+                    {/* NEW: Detailed Q&A Responses */}
+                    {result.responses && result.responses.length > 0 && (
+                      <div className="space-y-3 pt-4 border-t border-border/50">
+                        <h4 className="flex items-center gap-2 font-semibold text-foreground text-sm">
+                          <FileText className="h-4 w-4 text-blue-500" />
+                          Detailed Interview Responses
+                        </h4>
+                        <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                          {result.responses.map((resp, idx) => (
+                            <div key={idx} className="bg-slate-50 rounded-lg p-3 border border-slate-100 space-y-2">
+                              <p className="text-xs font-bold text-slate-700 leading-tight">Q: {resp.question}</p>
+                              <p className="text-xs text-slate-600 pl-3 border-l-2 border-slate-200">{resp.answer}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="mt-8 flex justify-end gap-3 border-t border-border pt-6">
+                  {result.decision === "pending" ? (
+                    <>
+                      <Button
+                        variant="outline"
+                        className="border-destructive text-destructive hover:bg-destructive hover:text-white"
+                        onClick={() => handleDecision(result._id, result.candidate_id, result.interview_id, "rejected")}
+                      >
+                        <XCircle className="mr-2 h-4 w-4" />
+                        Reject
+                      </Button>
+                      <Button
+                        onClick={() => handleDecision(result._id, result.candidate_id, result.interview_id, "selected")}
+                        className="bg-success hover:bg-success/90"
+                      >
+                        <CheckCircle className="mr-2 h-4 w-4" />
+                        Select Candidate
+                      </Button>
+                    </>
+                  ) : (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      Decision made: <span className="font-bold uppercase">{result.decision}</span>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        ) : (
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-20 text-center">
+            <div className="rounded-full bg-muted p-4">
+              <MessageSquare className="h-8 w-8 text-muted-foreground" />
+            </div>
+            <h3 className="mt-4 text-lg font-semibold text-foreground">No results found</h3>
+            <p className="mt-1 text-sm text-muted-foreground max-w-xs">
+              {filterInterviewId
+                ? `We couldn't find any results for interview ID "${filterInterviewId}"`
+                : "Results will appear here once candidates complete their interviews."}
+            </p>
+            {filterInterviewId && (
+              <Button variant="link" onClick={() => { setFilterInterviewId(""); fetchResults(""); }}>
+                Clear filters
+              </Button>
+            )}
+          </div>
+        )
+        }
+      </div>
+
+      {/* Transcript Modal */}
+      <Dialog open={isTranscriptOpen} onOpenChange={setIsTranscriptOpen}>
+        <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <FileText className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <DialogTitle>Interview Transcript</DialogTitle>
+                <DialogDescription>
+                  Full conversation log for {selectedResult?.candidate_name}
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <ScrollArea className="flex-1 pr-4">
+            <div className="space-y-4 py-4">
+              {selectedResult?.conversationTranscript && selectedResult.conversationTranscript.length > 0 ? (
+                selectedResult.conversationTranscript.map((msg, idx) => (
+                  <div
+                    key={idx}
+                    className={`flex flex-col ${msg.role === 'assistant' ? 'items-start' : 'items-end'}`}
+                  >
+                    <div className={`flex items-center gap-2 mb-1 ${msg.role === 'assistant' ? 'flex-row' : 'flex-row-reverse'}`}>
+                      {msg.role === 'assistant' ? (
+                        <Bot className="w-3 h-3 text-blue-600" />
+                      ) : (
+                        <User className="w-3 h-3 text-slate-600" />
+                      )}
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        {msg.role === 'assistant' ? 'AI Interviewer' : 'Candidate'}
+                      </span>
+                      <span className="text-[10px] text-slate-300">
+                        {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : ''}
+                      </span>
+                    </div>
+                    <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${msg.role === 'assistant'
+                      ? 'bg-blue-50 text-blue-900 rounded-tl-none border border-blue-100'
+                      : 'bg-slate-100 text-slate-900 rounded-tr-none border border-slate-200'
+                      }`}>
+                      {msg.content}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-10 text-muted-foreground italic">
+                  No transcript available for this session.
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Violations Modal */}
+      <Dialog open={isViolationsOpen} onOpenChange={setIsViolationsOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-amber-100 rounded-lg">
+                <AlertTriangle className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <DialogTitle>Violation & Focus Timeline</DialogTitle>
+                <DialogDescription>
+                  Integrity monitoring logs for {selectedResult?.candidate_name}
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <ScrollArea className="flex-1 pr-4">
+            {loadingEvents ? (
+              <div className="flex flex-col items-center justify-center py-20 gap-3">
+                <Loader2 className="w-8 h-8 animate-spin text-amber-600" />
+                <p className="text-sm text-slate-500">Loading monitoring data...</p>
+              </div>
+            ) : violationEvents.length > 0 ? (
+              <div className="relative space-y-4 py-4 before:absolute before:inset-0 before:ml-5 before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-200 before:to-transparent">
+                {violationEvents.map((event, idx) => (
+                  <div key={idx} className="relative flex items-center gap-4 pl-10">
+                    <div className={`absolute left-0 w-10 h-10 rounded-full flex items-center justify-center border-4 border-white shadow-sm ${['window_blur', 'visibility_hidden', 'tab_switch'].includes(event.event_type)
+                      ? 'bg-amber-100'
+                      : 'bg-blue-50'
+                      }`}>
+                      {['window_blur', 'visibility_hidden', 'tab_switch'].includes(event.event_type) ? (
+                        <AlertTriangle className="w-4 h-4 text-amber-600" />
+                      ) : (
+                        <History className="w-4 h-4 text-blue-600" />
+                      )}
+                    </div>
+                    <div className="flex-1 bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-bold uppercase text-slate-900 tracking-wide">
+                          {event.event_type.replace('_', ' ')}
+                        </span>
+                        <span className="text-[10px] font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">
+                          {event.timestamp_str}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600">
+                        {event.event_type === 'window_blur' && 'Candidate switched to another window or tab.'}
+                        {event.event_type === 'visibility_hidden' && 'Interview tab was hidden/minimized.'}
+                        {event.event_type === 'mouse_leave' && 'Candidate mouse left the interview area.'}
+                        {event.event_type === 'window_focus' && 'Candidate returned to the interview tab.'}
+                      </p>
+                      <div className="mt-2 flex items-center gap-2">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${event.suspicious_score >= 8 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                          }`}>
+                          Score: {event.suspicious_score} / 10
+                        </span>
+                        {event.duration_ms > 0 && (
+                          <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                            <Clock className="w-2.5 h-2.5" />
+                            {Math.round(event.duration_ms / 1000)}s away
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-20 bg-slate-50 rounded-2xl border border-dashed border-slate-200 mt-4">
+                <CheckCircle className="w-10 h-10 text-green-500 mx-auto mb-3 opacity-20" />
+                <p className="text-sm font-medium text-slate-900">Perfect Focus!</p>
+                <p className="text-xs text-slate-500 mt-1">No violations or focus loss detected for this session.</p>
+              </div>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

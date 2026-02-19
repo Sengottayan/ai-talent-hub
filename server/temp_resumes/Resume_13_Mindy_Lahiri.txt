@@ -1,0 +1,11 @@
+
+Mindy Lahiri
+Role: Doctor
+Email: mindy@example.com
+Phone: 555-0100
+
+Experience: 7 years
+
+Skills:
+- Medicine
+    

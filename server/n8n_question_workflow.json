@@ -1,0 +1,130 @@
+{
+    "name": "AI Interview Question Generator (Groq)",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "question/generation",
+                "responseMode": "lastNode",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                0,
+                0
+            ],
+            "id": "webhook-1",
+            "name": "Webhook"
+        },
+        {
+            "parameters": {
+                "model": "llama-3.3-70b-versatile",
+                "options": {
+                    "temperature": 0.5
+                }
+            },
+            "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+            "typeVersion": 1,
+            "position": [
+                150,
+                240
+            ],
+            "id": "groq-model",
+            "name": "Groq Chat Model",
+            "credentials": {
+                "groqApi": {
+                    "id": "YOUR_GROQ_CREDENTIAL_ID",
+                    "name": "Groq account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "promptType": "define",
+                "text": "=Generate 10 interview questions for a {{ $json.body.jobRole }} position.\n\nJob Description:\n{{ $json.body.jobDescription }}\n\nInterview Type: {{ $json.body.interviewType }}\n\nRequirements:\n1. Return ONLY a valid JSON array of objects.\n2. Each object must have a \"question\" (string) and a \"type\" (string).\n3. Valid types: \"Technical\", \"Behavioral\", \"Problem Solving\".\n4. Do not include markdown code blocks (like ```json), just the raw JSON array.\n5. Ensure the JSON is valid and can be parsed directly.",
+                "options": {
+                    "systemMessage": "You are an expert technical recruiter and interviewer. You generate high-quality interview questions."
+                }
+            },
+            "type": "@n8n/n8n-nodes-langchain.agent",
+            "typeVersion": 1.6,
+            "position": [
+                220,
+                0
+            ],
+            "id": "ai-agent",
+            "name": "AI Agent",
+            "inputs": [
+                {
+                    "index": 0,
+                    "node": "webhook-1",
+                    "type": "main",
+                    "output": 0
+                },
+                {
+                    "index": 0,
+                    "node": "groq-model",
+                    "type": "model",
+                    "output": 0
+                }
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const outputText = $input.all()[0].json.output;\n\nlet questions = [];\n\ntry {\n  // Clean up markdown if present\n  let cleanText = outputText.replace(/```json/g, '').replace(/```/g, '').trim();\n  questions = JSON.parse(cleanText);\n} catch (e) {\n  // Fallback if parsing fails\n  questions = [\n    { question: \"Could you tell me about yourself?\", type: \"Behavioral\" },\n    { question: \"What are your key strengths?\", type: \"Behavioral\" }\n  ];\n}\n\n// Ensure structure\nif (!Array.isArray(questions)) {\n  questions = [];\n}\n\nreturn { questions: questions };"
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                550,
+                0
+            ],
+            "id": "code-parser",
+            "name": "Parse JSON",
+            "inputs": [
+                {
+                    "index": 0,
+                    "node": "ai-agent",
+                    "type": "main",
+                    "output": 0
+                }
+            ]
+        }
+    ],
+    "connections": {
+        "Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "AI Agent",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Groq Chat Model": {
+            "model": [
+                [
+                    {
+                        "node": "AI Agent",
+                        "type": "model",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "AI Agent": {
+            "main": [
+                [
+                    {
+                        "node": "Parse JSON",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    }
+}

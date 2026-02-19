@@ -1,0 +1,720 @@
+{
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "reschedule-interview",
+                "responseMode": "responseNode",
+                "options": {}
+            },
+            "id": "7fd96d15-0591-46e5-8476-bf397e8a28ec",
+            "name": "Webhook - Reschedule Request",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2,
+            "position": [
+                -320,
+                912
+            ],
+            "webhookId": "reschedule-interview"
+        },
+        {
+            "parameters": {
+                "assignments": {
+                    "assignments": [
+                        {
+                            "id": "rescheduleId",
+                            "name": "rescheduleId",
+                            "value": "={{ $json.body.rescheduleId }}",
+                            "type": "string"
+                        },
+                        {
+                            "id": "interviewId",
+                            "name": "interviewId",
+                            "value": "={{ $json.body.interviewId }}",
+                            "type": "string"
+                        },
+                        {
+                            "id": "candidateEmail",
+                            "name": "candidateEmail",
+                            "value": "={{ $json.body.candidateEmail }}",
+                            "type": "string"
+                        },
+                        {
+                            "id": "candidateName",
+                            "name": "candidateName",
+                            "value": "={{ $json.body.candidateName }}",
+                            "type": "string"
+                        },
+                        {
+                            "id": "requestedDate",
+                            "name": "requestedDate",
+                            "value": "={{ $json.body.requestedDate }}",
+                            "type": "string"
+                        },
+                        {
+                            "id": "jobRole",
+                            "name": "jobRole",
+                            "value": "={{ $json.body.jobRole }}",
+                            "type": "string"
+                        },
+                        {
+                            "id": "interviewLink",
+                            "name": "interviewLink",
+                            "value": "={{ $json.body.interviewLink }}",
+                            "type": "string"
+                        },
+                        {
+                            "id": "calendarTitle",
+                            "name": "calendarTitle",
+                            "value": "={{ $json.body.calendarTitle || ('Interview: ' + $json.body.candidateName + ' – ' + $json.body.jobRole) }}",
+                            "type": "string"
+                        },
+                        {
+                            "id": "calendarDescription",
+                            "name": "calendarDescription",
+                            "value": "={{ $json.body.calendarDescription || ('Candidate: ' + $json.body.candidateName + '\\nEmail: ' + $json.body.candidateEmail + '\\nRole: ' + $json.body.jobRole + '\\nLink: ' + ($json.body.interviewLink || 'N/A') + '\\n\\nRescheduled via HireAI Platform') }}",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "b944b30c-1fbf-4e84-b96b-4105a4b66625",
+            "name": "Extract Request Data",
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 3.3,
+            "position": [
+                -96,
+                912
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "getAll",
+                "calendar": {
+                    "__rl": true,
+                    "value": "primary",
+                    "mode": "list",
+                    "cachedResultName": "Primary"
+                },
+                "options": {
+                    "timeMin": "={{ new Date(new Date($json.requestedDate).getTime() - 86400000).toISOString() }}",
+                    "timeMax": "={{ new Date(new Date($json.requestedDate).getTime() + 86400000).toISOString() }}",
+                    "singleEvents": true
+                }
+            },
+            "id": "de005371-05e7-4cbe-a07f-2c351a44ca6e",
+            "name": "Check Calendar Availability",
+            "type": "n8n-nodes-base.googleCalendar",
+            "typeVersion": 1.2,
+            "position": [
+                128,
+                912
+            ],
+            "alwaysOutputData": true,
+            "credentials": {
+                "googleCalendarOAuth2Api": {
+                    "id": "fYl0aBliTVgwfOCF",
+                    "name": "Google Calendar account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "jsCode": "// Get original request data\nconst requestData = $('Extract Request Data').first().json;\nconst items = $input.all();\nconst requestedDate = new Date(requestData.requestedDate);\nconst endTime = new Date(requestedDate.getTime() + 60*60*1000);\n\n// Detailed Trace Log\nlet debugLog = [\"[Debug Trace]\"];\ndebugLog.push(`Req: ${requestedDate.toISOString()} - ${endTime.toISOString()}`);\ndebugLog.push(`Found ${items.length} items.`);\n\nconst hasConflict = items.some((item, index) => {\n    const ev = item.json;\n    if (!ev || ev.status === 'cancelled') {\n        debugLog.push(`#${index}: Cancelled/Empty`);\n        return false;\n    }\n    \n    const sStr = ev.start?.dateTime;\n    const eStr = ev.end?.dateTime;\n    \n    if (sStr && eStr) {\n        const evStart = new Date(sStr);\n        const evEnd = new Date(eStr);\n        \n        const cond1 = requestedDate < evEnd; // 04:00 < 05:00 (T)\n        const cond2 = endTime > evStart;     // 05:00 > 04:00 (T)\n        const isConflict = cond1 && cond2;\n        \n        debugLog.push(`#${index}: ${sStr} to ${eStr} | Conflict: ${isConflict} (S<E:${cond1}, E>S:${cond2})`);\n        return isConflict;\n    }\n    \n    debugLog.push(`#${index}: Missing Dates (S:${sStr}, E:${eStr})`);\n    return false;\n});\n\n// Append full debug log to description\nconst originalDesc = requestData.calendarDescription || ('Candidate: ' + requestData.candidateName + '\\nEmail: ' + requestData.candidateEmail + '\\nRole: ' + requestData.jobRole);\nconst finalDesc = originalDesc + \"\\n\\n\" + debugLog.join(\"\\n\");\n\nconst status = !hasConflict ? \"AVAILABLE\" : \"CONFLICT\";\n\nreturn { json: {\n  rescheduleId: requestData.rescheduleId,\n  interviewId: requestData.interviewId,\n  candidateEmail: requestData.candidateEmail,\n  candidateName: requestData.candidateName,\n  requestedDate: requestData.requestedDate,\n  jobRole: requestData.jobRole,\n  interviewLink: requestData.interviewLink,\n  calendarTitle: requestData.calendarTitle || ('Interview: ' + requestData.candidateName + ' – ' + requestData.jobRole),\n  calendarDescription: finalDesc,\n  isAvailable: !hasConflict,\n  availabilityStatus: status,\n  endTime: endTime.toISOString()\n} };"
+            },
+            "id": "e8fd0a34-e0ae-4ff9-91c8-242c671e6551",
+            "name": "Process Availability",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                352,
+                912
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": true,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 1
+                    },
+                    "conditions": [
+                        {
+                            "id": "e16b4a7e-3341-4afd-b791-5907ca1f5650",
+                            "leftValue": "={{ $json.isAvailable }}",
+                            "rightValue": "",
+                            "operator": {
+                                "type": "boolean",
+                                "operation": "true",
+                                "singleValue": true
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                },
+                "options": {}
+            },
+            "id": "82545aec-1550-4b69-815a-eac734295b09",
+            "name": "Is Date Available?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2,
+            "position": [
+                560,
+                912
+            ]
+        },
+        {
+            "parameters": {
+                "calendar": {
+                    "__rl": true,
+                    "value": "primary",
+                    "mode": "list",
+                    "cachedResultName": "Primary"
+                },
+                "start": "={{ $json.requestedDate }}",
+                "end": "={{ $json.endTime }}",
+                "additionalFields": {
+                    "description": "={{ $json.calendarDescription }}",
+                    "sendUpdates": "all",
+                    "summary": "={{ $json.calendarTitle }}"
+                }
+            },
+            "id": "24045feb-1d11-4e5b-883d-490d94205308",
+            "name": "Create Calendar Event",
+            "type": "n8n-nodes-base.googleCalendar",
+            "typeVersion": 1.2,
+            "position": [
+                784,
+                784
+            ],
+            "credentials": {
+                "googleCalendarOAuth2Api": {
+                    "id": "fYl0aBliTVgwfOCF",
+                    "name": "Google Calendar account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "fromEmail": "no-reply@aitalenthub.com",
+                "toEmail": "={{ $(\"Process Availability\").item.json.candidateEmail }}",
+                "subject": "={{ `Interview Rescheduled - ${ $(\"Process Availability\").item.json.jobRole }` }}",
+                "html": "={{ `<div style=\"font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;\"> <h2 style=\"color: #2563eb;\">Interview Reschedule Confirmed</h2> <p>Hi <strong>${$(\"Process Availability\").item.json.candidateName}</strong>,</p> <p>Your reschedule request for the <strong>${$(\"Process Availability\").item.json.jobRole}</strong> position has been approved.</p> <div style=\"background: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0;\"> <p style=\"margin: 0;\"><strong>New Scheduled Time:</strong></p> <p style=\"font-size: 18px; color: #1e293b; margin: 5px 0;\">${new Date($(\"Process Availability\").item.json.requestedDate).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p> </div> <p>You can attend the interview by clicking the button below at the scheduled time:</p> <a href=\"${$(\"Process Availability\").item.json.interviewLink}\" style=\"display: inline-block; background: #2563eb; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; margin: 10px 0;\">Start Interview</a> <p style=\"color: #64748b; font-size: 14px; margin-top: 20px;\">If you have any issues, please contact the recruitment team.</p> <hr style=\"border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;\"> <p style=\"font-size: 12px; color: #94a3b8; text-align: center;\">Sent by Talent AI Recruitment Hub</p> </div>` }}",
+                "options": {}
+            },
+            "id": "3c4ca82b-9859-45e0-bedf-a7d844fe5ef3",
+            "name": "Send Confirmation Email",
+            "type": "n8n-nodes-base.emailSend",
+            "typeVersion": 2.1,
+            "position": [
+                1008,
+                784
+            ],
+            "webhookId": "497d25e4-0360-4f9e-884c-81d66cee8533",
+            "credentials": {
+                "smtp": {
+                    "id": "lgvOfT3wvCPCqc4N",
+                    "name": "SMTP account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://uncalamitous-submarginally-bonita.ngrok-free.dev/api/reschedule/confirm",
+                "authentication": "genericCredentialType",
+                "genericAuthType": "httpHeaderAuth",
+                "sendBody": true,
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "rescheduleId",
+                            "value": "={{ $(\"Process Availability\").item.json.rescheduleId }}"
+                        },
+                        {
+                            "name": "interviewId",
+                            "value": "={{ $(\"Process Availability\").item.json.interviewId }}"
+                        },
+                        {
+                            "name": "status",
+                            "value": "confirmed"
+                        },
+                        {
+                            "name": "confirmedDate",
+                            "value": "={{ $(\"Process Availability\").item.json.requestedDate }}"
+                        },
+                        {
+                            "name": "candidateEmail",
+                            "value": "={{ $(\"Process Availability\").item.json.candidateEmail }}"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "4f95b9f4-cdd8-4053-bb5e-cb0e283837ae",
+            "name": "Respond to Backend - Success",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                1232,
+                784
+            ],
+            "credentials": {
+                "httpHeaderAuth": {
+                    "id": "HdXffxBd0w3KXaIx",
+                    "name": "Header Auth account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ { success: true, message: 'Interview rescheduled successfully', rescheduleId: $(\"Process Availability\").item.json.rescheduleId, status: 'confirmed', date: $(\"Process Availability\").item.json.requestedDate } }}",
+                "options": {}
+            },
+            "id": "199e1541-d1ab-47b4-aea5-07510449d257",
+            "name": "Respond to Webhook - Success",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.1,
+            "position": [
+                1456,
+                784
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Generate alternative available dates\nconst requestedDate = new Date($json.requestedDate);\nconst availableDates = [];\nconst webhookBaseUrl = \"https://n8n.bravecoast-7ddc0116.uaenorth.azurecontainerapps.io/webhook\";\nfor (let i = 1; i <= 7; i++) {\n  const alternateDate = new Date(requestedDate);\n  alternateDate.setDate(alternateDate.getDate() + i);\n  const morningSlot = new Date(alternateDate);\n  morningSlot.setHours(10, 0, 0, 0);\n  if (availableDates.length < 5) {\n    availableDates.push({ datetime: morningSlot.toISOString(), formatted: morningSlot.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }), confirmLink: `${webhookBaseUrl}/confirm-date?rescheduleId=${$json.rescheduleId}&interviewId=${$json.interviewId}&date=${encodeURIComponent(morningSlot.toISOString())}&email=${encodeURIComponent($json.candidateEmail)}&name=${encodeURIComponent($json.candidateName)}&role=${encodeURIComponent($json.jobRole)}` });\n  }\n}\nreturn { json: { ...$json, availableDates } };"
+            },
+            "id": "4d748c1c-f9bf-4bc7-81ed-7ef1df0d1497",
+            "name": "Generate Alternative Dates",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                784,
+                1024
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://uncalamitous-submarginally-bonita.ngrok-free.dev/api/reschedule/pending",
+                "authentication": "genericCredentialType",
+                "genericAuthType": "httpHeaderAuth",
+                "sendBody": true,
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "rescheduleId",
+                            "value": "={{ $(\"Process Availability\").item.json.rescheduleId }}"
+                        },
+                        {
+                            "name": "interviewId",
+                            "value": "={{ $(\"Process Availability\").item.json.interviewId }}"
+                        },
+                        {
+                            "name": "status",
+                            "value": "pending"
+                        },
+                        {
+                            "name": "requestedDate",
+                            "value": "={{ $(\"Process Availability\").item.json.requestedDate }}"
+                        },
+                        {
+                            "name": "availableDates",
+                            "value": "={{ JSON.stringify($(\"Generate Alternative Dates\").item.json.availableDates.map(d => d.datetime)) }}"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "146e4166-d31b-4669-ad84-6d6bef366896",
+            "name": "Respond to Backend - Pending",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                1232,
+                1024
+            ],
+            "credentials": {
+                "httpHeaderAuth": {
+                    "id": "HdXffxBd0w3KXaIx",
+                    "name": "Header Auth account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ { success: true, message: 'Requested date not available. Alternative dates sent.', rescheduleId: $(\"Process Availability\").item.json.rescheduleId, status: 'pending' } }}",
+                "options": {}
+            },
+            "id": "d3344b5c-543a-4d96-bba6-d5d6a6f4510a",
+            "name": "Respond to Webhook - Pending",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.1,
+            "position": [
+                1456,
+                1024
+            ]
+        },
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "confirm-date",
+                "responseMode": "responseNode",
+                "options": {}
+            },
+            "id": "e05d0824-6b60-4346-ac33-78a1190edad6",
+            "name": "Webhook - Date Confirmation",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2,
+            "position": [
+                -320,
+                1312
+            ],
+            "webhookId": "confirm-date"
+        },
+        {
+            "parameters": {
+                "assignments": {
+                    "assignments": [
+                        {
+                            "id": "rescheduleId",
+                            "name": "rescheduleId",
+                            "value": "={{ $json.body.rescheduleId }}",
+                            "type": "string"
+                        },
+                        {
+                            "id": "interviewId",
+                            "name": "interviewId",
+                            "value": "={{ $json.body.interviewId }}",
+                            "type": "string"
+                        },
+                        {
+                            "id": "selectedDate",
+                            "name": "selectedDate",
+                            "value": "={{ $json.body.date }}",
+                            "type": "string"
+                        },
+                        {
+                            "id": "candidateEmail",
+                            "name": "candidateEmail",
+                            "value": "={{ $json.body.email }}",
+                            "type": "string"
+                        },
+                        {
+                            "id": "candidateName",
+                            "name": "candidateName",
+                            "value": "={{ $json.body.name }}",
+                            "type": "string"
+                        },
+                        {
+                            "id": "jobRole",
+                            "name": "jobRole",
+                            "value": "={{ $json.body.role }}",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "89d44bb0-1767-4cf0-a084-3aa8508c4387",
+            "name": "Extract Confirmation Data",
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 3.3,
+            "position": [
+                -96,
+                1312
+            ]
+        },
+        {
+            "parameters": {
+                "calendar": {
+                    "__rl": true,
+                    "value": "primary",
+                    "mode": "list",
+                    "cachedResultName": "Primary"
+                },
+                "start": "={{ $json.selectedDate }}",
+                "end": "={{ new Date(new Date($json.selectedDate).getTime() + 60*60*1000).toISOString() }}",
+                "additionalFields": {
+                    "description": "={{ 'Candidate: ' + $json.candidateName + '\\nEmail: ' + $json.candidateEmail + '\\nRole: ' + $json.jobRole + '\\n\\nDate confirmed by candidate via HireAI Platform' }}",
+                    "sendUpdates": "all",
+                    "summary": "={{ 'Interview: ' + $json.candidateName + ' – ' + $json.jobRole }}"
+                }
+            },
+            "id": "cdd987e0-136e-4992-8fa1-c3c4a1a7c5ed",
+            "name": "Create Confirmed Event",
+            "type": "n8n-nodes-base.googleCalendar",
+            "typeVersion": 1.2,
+            "position": [
+                128,
+                1312
+            ],
+            "credentials": {
+                "googleCalendarOAuth2Api": {
+                    "id": "fYl0aBliTVgwfOCF",
+                    "name": "Google Calendar account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "fromEmail": "no-reply@aitalenthub.com",
+                "toEmail": "={{ $(\"Extract Confirmation Data\").item.json.candidateEmail }}",
+                "subject": "={{ `Interview Confirmed - ${$(\"Extract Confirmation Data\").item.json.jobRole}` }}",
+                "html": "={{ `<div style=\"font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;\"> <h2 style=\"color: #10b981;\">Interview Confirmed!</h2> <p>Hi <strong>${$(\"Extract Confirmation Data\").item.json.candidateName}</strong>,</p> <p>Your interview for the <strong>${$(\"Extract Confirmation Data\").item.json.jobRole}</strong> position has been confirmed.</p> <div style=\"background: #ecfdf5; padding: 15px; border-radius: 8px; margin: 20px 0;\"> <p style=\"margin: 0;\"><strong>Confirmed Date & Time:</strong></p> <p style=\"font-size: 18px; color: #065f46; margin: 5px 0;\">${new Date($(\"Extract Confirmation Data\").item.json.selectedDate).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p> </div> <p>Add this to your calendar to stay on track!</p> <hr style=\"border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;\"> <p style=\"font-size: 12px; color: #94a3b8; text-align: center;\">Sent by Talent AI Recruitment Hub</p> </div>` }}",
+                "options": {}
+            },
+            "id": "582d318c-e268-465a-84ec-9a35ef7303f3",
+            "name": "Send Final Confirmation",
+            "type": "n8n-nodes-base.emailSend",
+            "typeVersion": 2.1,
+            "position": [
+                352,
+                1312
+            ],
+            "webhookId": "05ce7cb6-c952-4ce7-b5fe-db33a605e62f",
+            "credentials": {
+                "smtp": {
+                    "id": "lgvOfT3wvCPCqc4N",
+                    "name": "SMTP account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://uncalamitous-submarginally-bonita.ngrok-free.dev/api/reschedule/confirm",
+                "authentication": "genericCredentialType",
+                "genericAuthType": "httpHeaderAuth",
+                "sendBody": true,
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "rescheduleId",
+                            "value": "={{ $(\"Extract Confirmation Data\").item.json.rescheduleId }}"
+                        },
+                        {
+                            "name": "interviewId",
+                            "value": "={{ $(\"Extract Confirmation Data\").item.json.interviewId }}"
+                        },
+                        {
+                            "name": "status",
+                            "value": "confirmed"
+                        },
+                        {
+                            "name": "confirmedDate",
+                            "value": "={{ $(\"Extract Confirmation Data\").item.json.selectedDate }}"
+                        },
+                        {
+                            "name": "candidateEmail",
+                            "value": "={{ $(\"Extract Confirmation Data\").item.json.candidateEmail }}"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "73f34e21-5375-434d-8af8-53e730253da6",
+            "name": "Update Backend - Final",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                560,
+                1312
+            ],
+            "credentials": {
+                "httpHeaderAuth": {
+                    "id": "HdXffxBd0w3KXaIx",
+                    "name": "Header Auth account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ { success: true, message: 'Interview confirmed successfully', rescheduleId: $(\"Extract Confirmation Data\").item.json.rescheduleId, confirmedDate: $(\"Extract Confirmation Data\").item.json.selectedDate } }}",
+                "options": {}
+            },
+            "id": "bb9725f1-9956-454f-a926-fc71c926f51f",
+            "name": "Respond - Confirmed",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.1,
+            "position": [
+                784,
+                1312
+            ]
+        }
+    ],
+    "connections": {
+        "Webhook - Reschedule Request": {
+            "main": [
+                [
+                    {
+                        "node": "Extract Request Data",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Extract Request Data": {
+            "main": [
+                [
+                    {
+                        "node": "Check Calendar Availability",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Check Calendar Availability": {
+            "main": [
+                [
+                    {
+                        "node": "Process Availability",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Process Availability": {
+            "main": [
+                [
+                    {
+                        "node": "Is Date Available?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Is Date Available?": {
+            "main": [
+                [
+                    {
+                        "node": "Create Calendar Event",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Generate Alternative Dates",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Create Calendar Event": {
+            "main": [
+                [
+                    {
+                        "node": "Send Confirmation Email",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Send Confirmation Email": {
+            "main": [
+                [
+                    {
+                        "node": "Respond to Backend - Success",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Respond to Backend - Success": {
+            "main": [
+                [
+                    {
+                        "node": "Respond to Webhook - Success",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Generate Alternative Dates": {
+            "main": [
+                [
+                    {
+                        "node": "Respond to Backend - Pending",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Respond to Backend - Pending": {
+            "main": [
+                [
+                    {
+                        "node": "Respond to Webhook - Pending",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Webhook - Date Confirmation": {
+            "main": [
+                [
+                    {
+                        "node": "Extract Confirmation Data",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Extract Confirmation Data": {
+            "main": [
+                [
+                    {
+                        "node": "Create Confirmed Event",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Create Confirmed Event": {
+            "main": [
+                [
+                    {
+                        "node": "Update Backend - Final",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Update Backend - Final": {
+            "main": [
+                [
+                    {
+                        "node": "Respond - Confirmed",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "pinData": {},
+    "meta": {
+        "templateCredsSetupCompleted": true,
+        "instanceId": "162b26017566107a797c291b61c0ab28029e5f13e0f2f37acdb63a2905efffc6"
+    }
+}
