@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import axios from 'axios';
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 type Question = {
     question: string;
@@ -24,6 +24,7 @@ export default function ResumeUpload() {
     const [jobDescription, setJobDescription] = useState("");
     const [duration, setDuration] = useState("30");
     const [interviewType, setInterviewType] = useState("Technical");
+    const [questionCount, setQuestionCount] = useState("10");
 
     // Candidate Source State
     const [files, setFiles] = useState<File[]>([]);
@@ -52,6 +53,7 @@ export default function ResumeUpload() {
     const [aiSkills, setAiSkills] = useState("");
     const [aiResponsibilities, setAiResponsibilities] = useState("");
     const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+    const [isSuggestingSkills, setIsSuggestingSkills] = useState(false);
 
     // --- Handlers ---
 
@@ -83,6 +85,7 @@ export default function ResumeUpload() {
         formData.append("jobDescription", jobDescription);
         formData.append("duration", duration);
         formData.append("interviewType", interviewType);
+        formData.append("questionCount", questionCount);
         files.forEach((file) => formData.append("resumes", file));
         if (manualEmails) {
             const emails = manualEmails.split(/[\n,]+/).map(e => e.trim().toLowerCase()).filter(e => e);
@@ -193,9 +196,39 @@ export default function ResumeUpload() {
         }
     };
 
+    const handleSuggestSkills = async () => {
+        if (!aiRole.trim()) {
+            toast({ title: "Role Required", description: "Please enter a job role first to suggest skills.", variant: "destructive" });
+            return;
+        }
+
+        setIsSuggestingSkills(true);
+        try {
+            const response = await axios.post(`${API_URL}/ai/suggest-skills`, { role: aiRole });
+            const suggested = response.data.skills || '';
+            setAiSkills(suggested);
+            toast({ title: "Skills Suggested", description: "Auto-populated essential skills for this role." });
+        } catch (error) {
+            console.error(error);
+            toast({ title: "Suggestion Failed", description: "Failed to suggest skills. Please enter them manually.", variant: "destructive" });
+        } finally {
+            setIsSuggestingSkills(false);
+        }
+    };
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (aiRole.trim() && !aiSkills.trim() && showAIDialog) {
+                handleSuggestSkills();
+            }
+        }, 1500); // 1.5s debounce
+
+        return () => clearTimeout(timer);
+    }, [aiRole, showAIDialog]);
+
     const handleGenerateAI = async () => {
-        if (!aiRole.trim() || !aiExperience.trim()) {
-            toast({ title: "Missing Information", description: "Please enter both the job role and experience required.", variant: "destructive" });
+        if (!aiRole.trim() || !aiExperience.trim() || !aiSkills.trim()) {
+            toast({ title: "Missing Information", description: "Job Role, Experience, and Required Skills are mandatory.", variant: "destructive" });
             return;
         }
 
@@ -242,6 +275,8 @@ Format it in a clear, professional manner suitable for a job posting.`;
             setIsGeneratingAI(false);
         }
     };
+
+
 
     const resetForm = () => {
         setStep(1);
@@ -352,6 +387,18 @@ Format it in a clear, professional manner suitable for a job posting.`;
                                                 <SelectItem value="Behavioral">Behavioral</SelectItem>
                                                 <SelectItem value="Problem Solving">Problem Solving</SelectItem>
                                                 <SelectItem value="Leadership">Leadership</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Question Limit</Label>
+                                        <Select value={questionCount} onValueChange={setQuestionCount}>
+                                            <SelectTrigger><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="5">5 Questions</SelectItem>
+                                                <SelectItem value="10">10 Questions</SelectItem>
+                                                <SelectItem value="15">15 Questions</SelectItem>
+                                                <SelectItem value="20">20 Questions</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>
@@ -698,7 +745,24 @@ Format it in a clear, professional manner suitable for a job posting.`;
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="ai-skills">Required Skills</Label>
+                            <div className="flex items-center justify-between">
+                                <Label htmlFor="ai-skills">Required Skills *</Label>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={handleSuggestSkills}
+                                    disabled={isSuggestingSkills || !aiRole}
+                                    className="h-7 text-[10px] font-bold uppercase tracking-wider text-primary hover:bg-primary/5 gap-1.5"
+                                >
+                                    {isSuggestingSkills ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                        <SparklesIcon className="h-3 w-3" />
+                                    )}
+                                    Auto-Suggest
+                                </Button>
+                            </div>
                             <Textarea
                                 id="ai-skills"
                                 value={aiSkills}

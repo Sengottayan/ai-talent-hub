@@ -8,6 +8,10 @@ const { generateInterviewQuestions, generateInterviewFeedback } = require('../se
 // @access  Private
 const draftInterviewController = async (req, res) => {
     try {
+        console.log("📝 Draft Request Body Keys:", Object.keys(req.body));
+        console.log("📝 questionCount present:", 'questionCount' in req.body);
+        console.log("📝 questionCount value:", req.body.questionCount);
+
         const { jobRole, jobDescription } = req.body;
 
         // --- 1. Resume Parsing (Email Extraction) ---
@@ -38,8 +42,8 @@ const draftInterviewController = async (req, res) => {
 
         // --- 2. Question Generation ---
         console.log("Generating draft questions...");
-        const { interviewType, duration } = req.body;
-        const questions = await generateInterviewQuestions(jobRole, jobDescription, interviewType, duration);
+        const { interviewType, duration, questionCount } = req.body;
+        const questions = await generateInterviewQuestions(jobRole, jobDescription, interviewType, duration, questionCount);
 
         res.status(200).json({
             success: true,

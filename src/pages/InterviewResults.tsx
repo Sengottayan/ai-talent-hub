@@ -17,6 +17,15 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  Radar,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  ResponsiveContainer,
+  Tooltip as ChartTooltip,
+} from "recharts";
 
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
@@ -299,9 +308,56 @@ export default function InterviewResults() {
                     <div className="space-y-4">
                       <h4 className="flex items-center gap-2 font-semibold text-foreground">
                         <TrendingUp className="h-4 w-4" />
-                        Assessment Scores
+                        AI Skill Assessment
                       </h4>
-                      <div className="space-y-4">
+
+                      {/* Radar Chart */}
+                      {Object.keys(result.scores || {}).length >= 3 && (
+                        <div className="h-[280px] w-full mt-2 bg-gradient-to-br from-slate-50 to-white rounded-xl border border-slate-200 shadow-sm p-2 relative overflow-hidden">
+                          <div className="absolute top-2 right-3 flex items-center gap-1.5 opacity-60">
+                            <span className="w-2 h-2 rounded-full bg-blue-500 shadow-sm"></span>
+                            <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Radar View</span>
+                          </div>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <RadarChart cx="50%" cy="50%" outerRadius="65%" data={
+                              Object.entries(result.scores || {}).map(([skill, score]) => ({
+                                subject: skill,
+                                score: score,
+                                fullMark: 10,
+                              }))
+                            }>
+                              <PolarGrid stroke="#e2e8f0" strokeDasharray="3 3" />
+                              <PolarAngleAxis
+                                dataKey="subject"
+                                tick={{ fill: '#334155', fontSize: 11, fontWeight: 600 }}
+                              />
+                              <PolarRadiusAxis
+                                angle={90}
+                                domain={[0, 10]}
+                                tick={{ fill: '#94a3b8', fontSize: 10 }}
+                                tickCount={6}
+                                orientation="middle"
+                              />
+                              <Radar
+                                name={result.candidate_name}
+                                dataKey="score"
+                                stroke="#3b82f6"
+                                strokeWidth={2.5}
+                                fill="#3b82f6"
+                                fillOpacity={0.25}
+                                activeDot={{ r: 4, fill: '#2563eb', stroke: '#ffffff', strokeWidth: 2 }}
+                              />
+                              <ChartTooltip
+                                contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '13px', backgroundColor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(4px)' }}
+                                itemStyle={{ color: '#0f172a', fontWeight: 'bold' }}
+                                formatter={(value: number) => [`${value} / 10`, 'Score']}
+                              />
+                            </RadarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      )}
+
+                      <div className="space-y-4 pt-2">
                         {Object.entries(result.scores || {}).map(([skill, score]) => (
                           <div key={skill} className="space-y-1.5">
                             <div className="flex items-center justify-between text-sm">

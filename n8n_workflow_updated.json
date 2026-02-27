@@ -1,0 +1,135 @@
+{
+    "nodes": [
+        {
+            "parameters": {
+                "model": "llama-3.3-70b-versatile",
+                "options": {
+                    "temperature": 0.5
+                }
+            },
+            "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+            "typeVersion": 1,
+            "position": [
+                -256,
+                272
+            ],
+            "id": "0f9b7b2d-aab7-4eac-a548-7e9361c0e30a",
+            "name": "Groq Chat Model",
+            "credentials": {
+                "groqApi": {
+                    "id": "VSeCc5fk7XnNZj9U",
+                    "name": "Groq account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "promptType": "define",
+                "text": "=Generate {{ $json.body.questionCount }} interview questions for a {{ $json.body.jobRole }} position.\n\nJob Description:\n{{ $json.body.jobDescription }}\n\nInterview Type: {{ $json.body.interviewType }}\n\nRequirements:\n1. Return ONLY a valid JSON array of objects.\n2. Each object must have a \"question\" (string) and a \"type\" (string).\n3. Valid types: \"Technical\", \"Behavioral\", \"Problem Solving\".\n4. Do not include markdown code blocks (like ```json), just the raw JSON array.\n5. Ensure the JSON is valid and can be parsed directly.",
+                "options": {
+                    "systemMessage": "You are an expert technical recruiter and interviewer. You generate high-quality interview questions."
+                }
+            },
+            "type": "@n8n/n8n-nodes-langchain.agent",
+            "typeVersion": 1.6,
+            "position": [
+                -192,
+                32
+            ],
+            "id": "8dd1741e-d29f-4a5e-afd8-3399fc14d3be",
+            "name": "AI Agent",
+            "inputs": [
+                {
+                    "index": 0,
+                    "node": "webhook-1",
+                    "type": "main",
+                    "output": 0
+                },
+                {
+                    "index": 0,
+                    "node": "groq-model",
+                    "type": "model",
+                    "output": 0
+                }
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const outputText = $input.all()[0].json.output;\n\nlet questions = [];\n\ntry {\n  // Clean up markdown if present\n  let cleanText = outputText.replace(/```json/g, '').replace(/```/g, '').trim();\n  questions = JSON.parse(cleanText);\n} catch (e) {\n  // Fallback if parsing fails\n  questions = [\n    { question: \"Could you tell me about yourself?\", type: \"Behavioral\" },\n    { question: \"What are your key strengths?\", type: \"Behavioral\" }\n  ];\n}\n\n// Ensure structure\nif (!Array.isArray(questions)) {\n  questions = [];\n}\n\nreturn { questions: questions };"
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                144,
+                32
+            ],
+            "id": "08a190be-265a-4256-a06d-11d6cbc11e8e",
+            "name": "Parse JSON",
+            "inputs": [
+                {
+                    "index": 0,
+                    "node": "ai-agent",
+                    "type": "main",
+                    "output": 0
+                }
+            ]
+        },
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "question/generation",
+                "responseMode": "lastNode",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                -416,
+                32
+            ],
+            "id": "79b8731b-3e6f-436d-bcfa-b1dbef632bc9",
+            "name": "Webhook for question generation",
+            "webhookId": "c1477e6d-ff5f-414d-8e08-957d6b4ed313"
+        }
+    ],
+    "connections": {
+        "Groq Chat Model": {
+            "ai_languageModel": [
+                [
+                    {
+                        "node": "AI Agent",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "AI Agent": {
+            "main": [
+                [
+                    {
+                        "node": "Parse JSON",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Webhook for question generation": {
+            "main": [
+                [
+                    {
+                        "node": "AI Agent",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "pinData": {},
+    "meta": {
+        "templateCredsSetupCompleted": true,
+        "instanceId": "162b26017566107a797c291b61c0ab28029e5f13e0f2f37acdb63a2905efffc6"
+    }
+}

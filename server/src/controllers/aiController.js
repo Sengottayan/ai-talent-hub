@@ -88,6 +88,95 @@ const generateJobDescription = async (req, res) => {
     }
 };
 
-module.exports = {
-    generateJobDescription
+/**
+ * Suggest skills based on job role
+ * @route POST /api/ai/suggest-skills
+ */
+const suggestSkills = async (req, res) => {
+    console.log("🚀 Starting AI skills suggestion...");
+    try {
+        const { role } = req.body;
+
+        if (!role) {
+            console.warn("⚠️ AI Suggestion: No role provided");
+            return res.status(400).json({ message: 'Job role is required' });
+        }
+
+        const prompt = `Based on the job role "${role}", suggest a comma-separated list of the top 10 most essential technical and soft skills required. format the response ONLY as a comma-separated list of skills, nothing else.`;
+
+        // Try OpenRouter first
+        if (OPENROUTER_API_KEY) {
+            try {
+                console.log(`📡 Sending request to OpenRouter (Model: openai/gpt-3.5-turbo)...`);
+                const response = await axios.post(
+                    'https://openrouter.ai/api/v1/chat/completions',
+                    {
+                        model: 'openai/gpt-3.5-turbo',
+                        messages: [{ role: 'user', content: prompt }],
+                    },
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+                            'Content-Type': 'application/json',
+                            'HTTP-Referer': 'https://ai-talent-hub.com',
+                        },
+                        timeout: 10000,
+                    }
+                );
+
+                if (response.data?.choices?.[0]?.message?.content) {
+                    const text = response.data.choices[0].message.content.trim();
+                    console.log("✅ AI Suggestion successful via OpenRouter");
+                    return res.status(200).json({ success: true, skills: text });
+                }
+            } catch (orError) {
+                console.error("⚠️ OpenRouter primary failed for suggestion, trying fallback...", orError.message);
+            }
+        }
+
+        // Try Groq as fallback
+        if (GROQ_API_KEY) {
+            try {
+                console.log(`📡 Sending request to Groq (Model: llama3-8b-8192)...`);
+                const response = await axios.post(
+                    'https://api.groq.com/openai/v1/chat/completions',
+                    {
+                        model: 'llama3-8b-8192',
+                        messages: [{ role: 'user', content: prompt }],
+                    },
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${GROQ_API_KEY.trim()}`,
+                            'Content-Type': 'application/json',
+                        },
+                        timeout: 10000,
+                    }
+                );
+
+                if (response.data?.choices?.[0]?.message?.content) {
+                    const text = response.data.choices[0].message.content.trim();
+                    console.log("✅ AI Suggestion successful via Groq");
+                    return res.status(200).json({ success: true, skills: text });
+                }
+            } catch (groqError) {
+                console.error("❌ Groq fallback failed for suggestion:", groqError.response?.data || groqError.message);
+            }
+        }
+
+        throw new Error("All AI services failed to suggest skills.");
+
+    } catch (error) {
+        console.error('❌ AI Suggestion Final Error:', error.message);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to suggest skills',
+            error: error.message
+        });
+    }
 };
+
+module.exports = {
+    generateJobDescription,
+    suggestSkills
+};
+

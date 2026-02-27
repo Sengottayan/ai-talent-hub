@@ -11,56 +11,56 @@ const { sendMailNodemailer } = require('../utils/sendMailNodemailer');   // Node
  * Called only when HR approves a request.
  */
 const triggerN8nReschedule = async (request) => {
-    const webhookUrl = process.env.N8N_RESCHEDULE_WEBHOOK_URL;
-    if (!webhookUrl) {
-        console.warn('⚠️ N8N_RESCHEDULE_WEBHOOK_URL not defined. Skipping n8n trigger.');
-        return false;
-    }
+  const webhookUrl = process.env.N8N_RESCHEDULE_WEBHOOK_URL;
+  if (!webhookUrl) {
+    console.warn('⚠️ N8N_RESCHEDULE_WEBHOOK_URL not defined. Skipping n8n trigger.');
+    return false;
+  }
 
-    const interview = request.interviewId;
-    const candidate = request.candidateId;
-    const jobRole = interview.jobRole || interview.role || 'Position';
+  const interview = request.interviewId;
+  const candidate = request.candidateId;
+  const jobRole = interview.jobRole || interview.role || 'Position';
 
-    // ─── Build a human-readable calendar event title ─────────────────────────
-    // This is used by n8n's Google Calendar node as the event "Summary" / Title
-    const calendarTitle = `Interview: ${candidate.name} – ${jobRole}`;
-    const calendarDescription = [
-        `Candidate : ${candidate.name}`,
-        `Email     : ${candidate.email}`,
-        `Role      : ${jobRole}`,
-        `Link      : ${interview.interviewLink || 'N/A'}`,
-        ``,
-        `Rescheduled via HireAI Platform`,
-    ].join('\n');
+  // ─── Build a human-readable calendar event title ─────────────────────────
+  // This is used by n8n's Google Calendar node as the event "Summary" / Title
+  const calendarTitle = `Interview: ${candidate.name} – ${jobRole}`;
+  const calendarDescription = [
+    `Candidate : ${candidate.name}`,
+    `Email     : ${candidate.email}`,
+    `Role      : ${jobRole}`,
+    `Link      : ${interview.interviewLink || 'N/A'}`,
+    ``,
+    `Rescheduled via HireAI Platform`,
+  ].join('\n');
 
-    // Ensure we have a valid email
-    const candidateEmail = candidate.email || interview.candidateEmail || "";
-    if (!candidateEmail) {
-        console.warn(`⚠️ Warning: No candidate email found for request ${request._id}. n8n might fail to send emails.`);
-    }
+  // Ensure we have a valid email
+  const candidateEmail = candidate.email || interview.candidateEmail || "";
+  if (!candidateEmail) {
+    console.warn(`⚠️ Warning: No candidate email found for request ${request._id}. n8n might fail to send emails.`);
+  }
 
-    const payload = {
-        rescheduleId: request._id,
-        interviewId: interview._id,
-        candidateId: interview.interviewId,   // compatibility string ID
-        candidateEmail: candidateEmail,
-        candidateName: candidate.name,
-        requestedDate: request.requestedDate,
-        jobRole: jobRole,
-        interviewLink: interview.interviewLink,
-        confirmWebhookUrl: process.env.N8N_CONFIRM_WEBHOOK_URL,
-        // ─── Google Calendar fields ────────────────────────────────────────
-        // In your n8n Google Calendar node, set:
-        //   Summary/Title  →  {{ $json.calendarTitle }}
-        //   Description    →  {{ $json.calendarDescription }}
-        calendarTitle,
-        calendarDescription,
-    };
+  const payload = {
+    rescheduleId: request._id,
+    interviewId: interview._id,
+    candidateId: interview.interviewId,   // compatibility string ID
+    candidateEmail: candidateEmail,
+    candidateName: candidate.name,
+    requestedDate: request.requestedDate,
+    jobRole: jobRole,
+    interviewLink: interview.interviewLink,
+    confirmWebhookUrl: process.env.N8N_CONFIRM_WEBHOOK_URL,
+    // ─── Google Calendar fields ────────────────────────────────────────
+    // In your n8n Google Calendar node, set:
+    //   Summary/Title  →  {{ $json.calendarTitle }}
+    //   Description    →  {{ $json.calendarDescription }}
+    calendarTitle,
+    calendarDescription,
+  };
 
-    console.log('📤 Sending reschedule payload to n8n:', payload);
-    await axios.post(webhookUrl, payload);
-    console.log(`✅ N8N Reschedule Webhook triggered for request ${request._id}`);
-    return true;
+  console.log('📤 Sending reschedule payload to n8n:', payload);
+  await axios.post(webhookUrl, payload);
+  console.log(`✅ N8N Reschedule Webhook triggered for request ${request._id}`);
+  return true;
 };
 
 // ─── Helper: Send Rejection Email via Nodemailer (Gmail App Password) ───────
@@ -73,22 +73,22 @@ const triggerN8nReschedule = async (request) => {
  *   NODEMAILER_PASS   – 16-char Gmail App Password
  */
 const sendRejectionEmail = async (candidateEmail, candidateName, jobRole, requestedDate) => {
-    const formattedDate = requestedDate
-        ? new Date(requestedDate).toLocaleDateString('en-IN', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-        })
-        : 'your requested date';
+  const formattedDate = requestedDate
+    ? new Date(requestedDate).toLocaleDateString('en-IN', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    })
+    : 'your requested date';
 
-    const year = new Date().getFullYear();
-    const dashboardUrl = process.env.FRONTEND_URL
-        ? `${process.env.FRONTEND_URL}/candidate/dashboard`
-        : 'http://localhost:6060/candidate/dashboard';
+  const year = new Date().getFullYear();
+  const dashboardUrl = process.env.FRONTEND_URL
+    ? `${process.env.FRONTEND_URL}/candidate/dashboard`
+    : 'http://localhost:6060/candidate/dashboard';
 
-    // ── Same design as the EmailJS template ─────────────────────────────────
-    const html = `
+  // ── Same design as the EmailJS template ─────────────────────────────────
+  const html = `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -205,12 +205,12 @@ const sendRejectionEmail = async (candidateEmail, candidateName, jobRole, reques
 </body>
 </html>`;
 
-    // ── Send via Nodemailer (Gmail App Password — no EmailJS template needed) ─
-    return sendMailNodemailer(
-        candidateEmail,
-        `Update on Your Reschedule Request \u2013 ${jobRole}`,
-        html
-    );
+  // ── Send via Nodemailer (Gmail App Password — no EmailJS template needed) ─
+  return sendMailNodemailer(
+    candidateEmail,
+    `Update on Your Reschedule Request \u2013 ${jobRole}`,
+    html
+  );
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -220,65 +220,65 @@ const sendRejectionEmail = async (candidateEmail, candidateName, jobRole, reques
 // Status guard: one active request per interview at a time.
 // ─────────────────────────────────────────────────────────────────────────────
 const createRescheduleRequest = async (req, res) => {
-    console.log('📋 Create Reschedule Request Initiated (pending HR approval).');
-    try {
-        const { interviewId, candidateId, requestedDate, reason } = req.body;
+  console.log('📋 Create Reschedule Request Initiated (pending HR approval).');
+  try {
+    const { interviewId, candidateId, requestedDate, reason } = req.body;
 
-        if (!interviewId || !candidateId || !requestedDate || !reason) {
-            return res.status(400).json({ message: 'All fields are required.' });
-        }
-
-        // ── 1. Validate the requested datetime is in the future ──────────────────
-        const parsedDate = new Date(requestedDate);
-        if (isNaN(parsedDate.getTime())) {
-            return res.status(400).json({ message: 'Invalid requestedDate format.' });
-        }
-        if (parsedDate <= new Date()) {
-            return res.status(400).json({ message: 'Requested date must be in the future.' });
-        }
-
-        // ── 2. Duplicate guard ──────────────────────────────────────────────────
-        // Block if there is already a Pending / Processing / Action Required request
-        // for the SAME interview. Rejected / Confirmed requests don’t count.
-        const ACTIVE_STATUSES = ['Pending', 'Processing', 'Action Required'];
-        const existing = await RescheduleRequest.findOne({
-            interviewId,
-            status: { $in: ACTIVE_STATUSES },
-        });
-
-        if (existing) {
-            console.warn(`⚠️ Duplicate reschedule blocked for interview ${interviewId}. Existing: ${existing._id} (${existing.status})`);
-            return res.status(409).json({
-                message: `You already have an active reschedule request for this interview (status: "${existing.status}"). Please wait for HR to process it before submitting another.`,
-                existingRequestId: existing._id,
-                existingStatus: existing.status,
-            });
-        }
-
-        // ── 3. Create the request ───────────────────────────────────────────────
-        // Always start as Pending — HR must approve before n8n is triggered
-        const request = await RescheduleRequest.create({
-            interviewId,
-            candidateId,
-            requestedDate: parsedDate,   // Stored as proper Date object with time
-            reason,
-            status: 'Pending',
-        });
-
-        // Update interview status to indicate rescheduling is requested
-        await Interview.findByIdAndUpdate(interviewId, { status: 'Rescheduled' });
-
-        console.log(`📥 Reschedule request ${request._id} saved for ${parsedDate.toISOString()}. Awaiting HR approval.`);
-
-        res.status(201).json({
-            success: true,
-            message: 'Reschedule request submitted. Awaiting HR approval.',
-            data: request,
-        });
-    } catch (error) {
-        console.error('Create Reschedule Error:', error);
-        res.status(500).json({ message: error.message });
+    if (!interviewId || !candidateId || !requestedDate || !reason) {
+      return res.status(400).json({ message: 'All fields are required.' });
     }
+
+    // ── 1. Validate the requested datetime is in the future ──────────────────
+    const parsedDate = new Date(requestedDate);
+    if (isNaN(parsedDate.getTime())) {
+      return res.status(400).json({ message: 'Invalid requestedDate format.' });
+    }
+    if (parsedDate <= new Date()) {
+      return res.status(400).json({ message: 'Requested date must be in the future.' });
+    }
+
+    // ── 2. Duplicate guard ──────────────────────────────────────────────────
+    // Block if there is already a Pending / Processing / Action Required request
+    // for the SAME interview. Rejected / Confirmed requests don’t count.
+    const ACTIVE_STATUSES = ['Pending', 'Processing', 'Action Required'];
+    const existing = await RescheduleRequest.findOne({
+      interviewId,
+      status: { $in: ACTIVE_STATUSES },
+    });
+
+    if (existing) {
+      console.warn(`⚠️ Duplicate reschedule blocked for interview ${interviewId}. Existing: ${existing._id} (${existing.status})`);
+      return res.status(409).json({
+        message: `You already have an active reschedule request for this interview (status: "${existing.status}"). Please wait for HR to process it before submitting another.`,
+        existingRequestId: existing._id,
+        existingStatus: existing.status,
+      });
+    }
+
+    // ── 3. Create the request ───────────────────────────────────────────────
+    // Always start as Pending — HR must approve before n8n is triggered
+    const request = await RescheduleRequest.create({
+      interviewId,
+      candidateId,
+      requestedDate: parsedDate,   // Stored as proper Date object with time
+      reason,
+      status: 'Pending',
+    });
+
+    // Update interview status to indicate rescheduling is requested
+    await Interview.findByIdAndUpdate(interviewId, { status: 'Rescheduled' });
+
+    console.log(`📥 Reschedule request ${request._id} saved for ${parsedDate.toISOString()}. Awaiting HR approval.`);
+
+    res.status(201).json({
+      success: true,
+      message: 'Reschedule request submitted. Awaiting HR approval.',
+      data: request,
+    });
+  } catch (error) {
+    console.error('Create Reschedule Error:', error);
+    res.status(500).json({ message: error.message });
+  }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -287,50 +287,59 @@ const createRescheduleRequest = async (req, res) => {
 // @access  Private (HR)
 // ─────────────────────────────────────────────────────────────────────────────
 const approveRescheduleRequest = async (req, res) => {
-    try {
-        let request = await RescheduleRequest.findById(req.params.id)
-            .populate('candidateId interviewId');
+  try {
+    let request = await RescheduleRequest.findById(req.params.id)
+      .populate('candidateId interviewId');
 
-        if (!request) {
-            return res.status(404).json({ message: 'Reschedule request not found.' });
-        }
-
-        if (request.status !== 'Pending') {
-            return res.status(400).json({
-                message: `Cannot approve a request that is already "${request.status}".`,
-            });
-        }
-
-        // Mark as Processing while n8n works
-        request.status = 'Processing';
-        await request.save();
-
-        // Trigger n8n
-        try {
-            await triggerN8nReschedule(request);
-        } catch (webhookError) {
-            console.error('❌ Failed to trigger n8n webhook:', webhookError.message);
-            // Fallback: mark as Approved without n8n automation
-            request.status = 'Approved';
-            request.n8nStatus = 'failed';
-            await request.save();
-            return res.status(207).json({
-                success: true,
-                message: 'Request approved but n8n automation failed. Please process manually.',
-                data: request,
-                n8nError: webhookError.message,
-            });
-        }
-
-        res.json({
-            success: true,
-            message: 'Reschedule request approved. n8n automation triggered.',
-            data: request,
-        });
-    } catch (error) {
-        console.error('Approve Reschedule Error:', error);
-        res.status(500).json({ message: error.message });
+    if (!request) {
+      return res.status(404).json({ message: 'Reschedule request not found.' });
     }
+
+    if (request.status !== 'Pending') {
+      return res.status(400).json({
+        message: `Cannot approve a request that is already "${request.status}".`,
+      });
+    }
+
+    // Safety check for populated fields
+
+    // Safety check for populated fields
+    if (!request.interviewId || !request.candidateId) {
+      console.warn(`⚠️ Cannot approve request ${request._id}: missing interview or candidate details.`);
+      return res.status(422).json({
+        message: 'This request is missing critical data (candidate or interview) and cannot be approved automatically.'
+      });
+    }
+
+    request.status = 'Processing';
+    await request.save();
+
+    // Trigger n8n
+    try {
+      await triggerN8nReschedule(request);
+    } catch (webhookError) {
+      console.error('❌ Failed to trigger n8n webhook:', webhookError.message);
+      // Fallback: mark as Approved without n8n automation
+      request.status = 'Approved';
+      request.n8nStatus = 'failed';
+      await request.save();
+      return res.status(207).json({
+        success: true,
+        message: 'Request approved but n8n automation failed. Please process manually.',
+        data: request,
+        n8nError: webhookError.message,
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Reschedule request approved. n8n automation triggered.',
+      data: request,
+    });
+  } catch (error) {
+    console.error('Approve Reschedule Error:', error);
+    res.status(500).json({ message: error.message });
+  }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -339,59 +348,63 @@ const approveRescheduleRequest = async (req, res) => {
 // @access  Private (HR)
 // ─────────────────────────────────────────────────────────────────────────────
 const rejectRescheduleRequest = async (req, res) => {
-    try {
-        const request = await RescheduleRequest.findById(req.params.id)
-            .populate('candidateId interviewId');
+  try {
+    const request = await RescheduleRequest.findById(req.params.id)
+      .populate('candidateId interviewId');
 
-        if (!request) {
-            return res.status(404).json({ message: 'Reschedule request not found.' });
-        }
-
-        if (request.status !== 'Pending') {
-            return res.status(400).json({
-                message: `Cannot reject a request that is already "${request.status}".`,
-            });
-        }
-
-        // Mark as Rejected
-        request.status = 'Rejected';
-        await request.save();
-
-        // Revert interview status to Active (original schedule stands)
-        await Interview.findByIdAndUpdate(request.interviewId._id, { status: 'Active' });
-
-        // Send rejection email
-        const candidate = request.candidateId;
-        const interview = request.interviewId;
-
-        let emailResult = { success: false };
-        try {
-            emailResult = await sendRejectionEmail(
-                candidate.email,
-                candidate.name,
-                interview.jobRole || interview.role || 'the position',
-                request.requestedDate,
-                request.reason
-            );
-            if (emailResult.success) {
-                console.log(`📧 Rejection email sent to ${candidate.email}`);
-            } else {
-                console.warn(`⚠️ Rejection email failed for ${candidate.email}:`, emailResult.error);
-            }
-        } catch (emailError) {
-            console.error('❌ Email error during rejection:', emailError.message);
-        }
-
-        res.json({
-            success: true,
-            message: 'Reschedule request rejected.',
-            emailSent: emailResult.success,
-            data: request,
-        });
-    } catch (error) {
-        console.error('Reject Reschedule Error:', error);
-        res.status(500).json({ message: error.message });
+    if (!request) {
+      return res.status(404).json({ message: 'Reschedule request not found.' });
     }
+
+    if (request.status !== 'Pending') {
+      return res.status(400).json({
+        message: `Cannot reject a request that is already "${request.status}".`,
+      });
+    }
+
+    // Mark as Rejected
+    request.status = 'Rejected';
+    await request.save();
+
+    // Revert interview status to Active (original schedule stands) - Null check added
+    if (request.interviewId && request.interviewId._id) {
+      await Interview.findByIdAndUpdate(request.interviewId._id, { status: 'Active' });
+    } else {
+      console.warn(`⚠️ Request ${request._id} has no interviewId attached. Skipping interview status update.`);
+    }
+
+    // Send rejection email
+    const candidate = request.candidateId;
+    const interview = request.interviewId;
+
+    let emailResult = { success: false };
+    try {
+      emailResult = await sendRejectionEmail(
+        candidate.email,
+        candidate.name,
+        interview.jobRole || interview.role || 'the position',
+        request.requestedDate,
+        request.reason
+      );
+      if (emailResult.success) {
+        console.log(`📧 Rejection email sent to ${candidate.email}`);
+      } else {
+        console.warn(`⚠️ Rejection email failed for ${candidate.email}:`, emailResult.error);
+      }
+    } catch (emailError) {
+      console.error('❌ Email error during rejection:', emailError.message);
+    }
+
+    res.json({
+      success: true,
+      message: 'Reschedule request rejected.',
+      emailSent: emailResult.success,
+      data: request,
+    });
+  } catch (error) {
+    console.error('Reject Reschedule Error:', error);
+    res.status(500).json({ message: error.message });
+  }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -400,41 +413,41 @@ const rejectRescheduleRequest = async (req, res) => {
 // @access  Private (n8n Webhook via protectServer)
 // ─────────────────────────────────────────────────────────────────────────────
 const confirmReschedule = async (req, res) => {
-    try {
-        const { rescheduleId, confirmedDate } = req.body;
+  try {
+    const { rescheduleId, confirmedDate } = req.body;
 
-        if (!rescheduleId || !confirmedDate) {
-            return res.status(400).json({ success: false, message: 'Missing required fields' });
-        }
-
-        const request = await RescheduleRequest.findById(rescheduleId);
-        if (!request) {
-            return res.status(404).json({ success: false, message: 'Reschedule request not found' });
-        }
-
-        // Update request
-        request.status = 'Confirmed';
-        request.n8nStatus = 'confirmed';
-        request.confirmedDate = new Date(confirmedDate);
-        await request.save();
-
-        // Update the interview with the new confirmed date
-        const interview = await Interview.findById(request.interviewId);
-        if (interview) {
-            interview.status = 'Active';
-            interview.scheduledDate = new Date(confirmedDate);
-            // Extend expiry by 48 hours from the new date
-            interview.expiresAt = new Date(new Date(confirmedDate).getTime() + 48 * 60 * 60 * 1000);
-            await interview.save();
-        }
-
-        console.log(`✅ Reschedule Confirmed via N8N: ${rescheduleId} → ${confirmedDate}`);
-        res.json({ success: true, message: 'Reschedule confirmed successfully' });
-
-    } catch (error) {
-        console.error('Confirm Reschedule Error:', error);
-        res.status(500).json({ success: false, message: error.message });
+    if (!rescheduleId || !confirmedDate) {
+      return res.status(400).json({ success: false, message: 'Missing required fields' });
     }
+
+    const request = await RescheduleRequest.findById(rescheduleId);
+    if (!request) {
+      return res.status(404).json({ success: false, message: 'Reschedule request not found' });
+    }
+
+    // Update request
+    request.status = 'Confirmed';
+    request.n8nStatus = 'confirmed';
+    request.confirmedDate = new Date(confirmedDate);
+    await request.save();
+
+    // Update the interview with the new confirmed date
+    const interview = await Interview.findById(request.interviewId);
+    if (interview) {
+      interview.status = 'Active';
+      interview.scheduledDate = new Date(confirmedDate);
+      // Extend expiry by 48 hours from the new date
+      interview.expiresAt = new Date(new Date(confirmedDate).getTime() + 48 * 60 * 60 * 1000);
+      await interview.save();
+    }
+
+    console.log(`✅ Reschedule Confirmed via N8N: ${rescheduleId} → ${confirmedDate}`);
+    res.json({ success: true, message: 'Reschedule confirmed successfully' });
+
+  } catch (error) {
+    console.error('Confirm Reschedule Error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -443,50 +456,50 @@ const confirmReschedule = async (req, res) => {
 // @access  Private (n8n Webhook via protectServer)
 // ─────────────────────────────────────────────────────────────────────────────
 const pendingReschedule = async (req, res) => {
-    try {
-        const { rescheduleId, availableDates } = req.body;
+  try {
+    const { rescheduleId, availableDates } = req.body;
 
-        if (!rescheduleId) {
-            return res.status(400).json({ success: false, message: 'Missing rescheduleId' });
-        }
+    if (!rescheduleId) {
+      return res.status(400).json({ success: false, message: 'Missing rescheduleId' });
+    }
 
-        // Populate so we can send a notification email
-        const request = await RescheduleRequest.findById(rescheduleId)
-            .populate('candidateId interviewId');
-        if (!request) {
-            return res.status(404).json({ success: false, message: 'Reschedule request not found' });
-        }
+    // Populate so we can send a notification email
+    const request = await RescheduleRequest.findById(rescheduleId)
+      .populate('candidateId interviewId');
+    if (!request) {
+      return res.status(404).json({ success: false, message: 'Reschedule request not found' });
+    }
 
-        request.status = 'Action Required'; // Candidate needs to pick from alternatives
-        request.n8nStatus = 'pending';
+    request.status = 'Action Required'; // Candidate needs to pick from alternatives
+    request.n8nStatus = 'pending';
 
-        let dates = availableDates;
-        if (typeof availableDates === 'string') {
-            try { dates = JSON.parse(availableDates); } catch (e) { /* ignore */ }
-        }
-        request.availableDates = dates || [];
-        await request.save();
+    let dates = availableDates;
+    if (typeof availableDates === 'string') {
+      try { dates = JSON.parse(availableDates); } catch (e) { /* ignore */ }
+    }
+    request.availableDates = dates || [];
+    await request.save();
 
-        // ── Notify candidate that their requested date was NOT available ──────
-        const candidate = request.candidateId;
-        const interview = request.interviewId;
-        const jobRole = interview.jobRole || interview.role || 'Position';
-        const requestedDateStr = new Date(request.requestedDate).toLocaleDateString('en-IN', {
-            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-        });
-        const year = new Date().getFullYear();
-        const dashboardUrl = process.env.FRONTEND_URL || 'http://localhost:6060/candidate/dashboard';
+    // ── Notify candidate that their requested date was NOT available ──────
+    const candidate = request.candidateId;
+    const interview = request.interviewId;
+    const jobRole = interview.jobRole || interview.role || 'Position';
+    const requestedDateStr = new Date(request.requestedDate).toLocaleDateString('en-IN', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+    const year = new Date().getFullYear();
+    const dashboardUrl = process.env.FRONTEND_URL || 'http://localhost:6060/candidate/dashboard';
 
-        if (candidate?.email) {
-            // Build the list of alternative dates
-            const dateListItems = (request.availableDates || []).map(d =>
-                `<li style="margin-bottom:8px;">
+    if (candidate?.email) {
+      // Build the list of alternative dates
+      const dateListItems = (request.availableDates || []).map(d =>
+        `<li style="margin-bottom:8px;">
                      <strong>${new Date(d).toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</strong>
                  </li>`
-            ).join('');
+      ).join('');
 
-            const alternateDatesHtml = (request.availableDates || []).length > 0
-                ? `<div style="background:#fff7ed; border:1px solid #fed7aa; border-left:4px solid #f97316; border-radius:10px; padding:18px 20px; margin-bottom:24px;">
+      const alternateDatesHtml = (request.availableDates || []).length > 0
+        ? `<div style="background:#fff7ed; border:1px solid #fed7aa; border-left:4px solid #f97316; border-radius:10px; padding:18px 20px; margin-bottom:24px;">
                         <p style="color:#c2410c; font-weight:700; margin:0 0 12px; font-size:15px;">
                           &#128197; &nbsp;Alternative Slots Available
                         </p>
@@ -501,13 +514,13 @@ const pendingReschedule = async (req, res) => {
                           Please log in to your dashboard to confirm one of these slots.
                         </p>
                    </div>`
-                : `<div style="background:#fef2f2; border:1px solid #fecaca; border-left:4px solid #ef4444; border-radius:10px; padding:18px 20px; margin-bottom:24px;">
+        : `<div style="background:#fef2f2; border:1px solid #fecaca; border-left:4px solid #ef4444; border-radius:10px; padding:18px 20px; margin-bottom:24px;">
                         <p style="color:#dc2626; font-weight:700; margin:0 0 8px;">No Slots Available</p>
                         <p style="color:#7f1d1d; margin:0; font-size:14px;">Please contact HR directly to arrange a suitable time.</p>
                    </div>`;
 
-            // Rich HTML Template (matching rejection email style)
-            const html = `
+      // Rich HTML Template (matching rejection email style)
+      const html = `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -569,26 +582,26 @@ const pendingReschedule = async (req, res) => {
 </body>
 </html>`;
 
-            try {
-                // Use Nodemailer instead of EmailJS
-                await sendMailNodemailer(
-                    candidate.email,
-                    `Action Required: Alternative Interview Dates – ${jobRole}`,
-                    html
-                );
-                console.log(`📧 Date-unavailable (Alternative Options) email sent to ${candidate.email} via Nodemailer`);
-            } catch (emailErr) {
-                console.warn('⚠️ Could not send date-unavailable email:', emailErr.message);
-            }
-        }
-
-        console.log(`ℹ️ Reschedule Pending – Date occupied, alternatives stored: ${rescheduleId}`);
-        res.json({ success: true, message: 'Reschedule alternatives saved and candidate notified.' });
-
-    } catch (error) {
-        console.error('Pending Reschedule Error:', error);
-        res.status(500).json({ success: false, message: error.message });
+      try {
+        // Use Nodemailer instead of EmailJS
+        await sendMailNodemailer(
+          candidate.email,
+          `Action Required: Alternative Interview Dates – ${jobRole}`,
+          html
+        );
+        console.log(`📧 Date-unavailable (Alternative Options) email sent to ${candidate.email} via Nodemailer`);
+      } catch (emailErr) {
+        console.warn('⚠️ Could not send date-unavailable email:', emailErr.message);
+      }
     }
+
+    console.log(`ℹ️ Reschedule Pending – Date occupied, alternatives stored: ${rescheduleId}`);
+    res.json({ success: true, message: 'Reschedule alternatives saved and candidate notified.' });
+
+  } catch (error) {
+    console.error('Pending Reschedule Error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -597,15 +610,15 @@ const pendingReschedule = async (req, res) => {
 // @access  Private (HR)
 // ─────────────────────────────────────────────────────────────────────────────
 const getRescheduleRequests = async (req, res) => {
-    try {
-        const requests = await RescheduleRequest.find({})
-            .populate('interviewId')
-            .populate('candidateId')
-            .sort({ createdAt: -1 });
-        res.json(requests);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
+  try {
+    const requests = await RescheduleRequest.find({})
+      .populate('interviewId')
+      .populate('candidateId')
+      .sort({ createdAt: -1 });
+    res.json(requests);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -614,21 +627,21 @@ const getRescheduleRequests = async (req, res) => {
 // @access  Public / Candidate
 // ─────────────────────────────────────────────────────────────────────────────
 const getRescheduleStatus = async (req, res) => {
-    try {
-        const request = await RescheduleRequest.findById(req.params.id);
-        if (!request) {
-            return res.status(404).json({ message: 'Request not found' });
-        }
-        res.json({
-            status: request.status,
-            n8nStatus: request.n8nStatus,
-            availableDates: request.availableDates,
-            confirmedDate: request.confirmedDate,
-            interviewId: request.interviewId,
-        });
-    } catch (error) {
-        res.status(500).json({ message: error.message });
+  try {
+    const request = await RescheduleRequest.findById(req.params.id);
+    if (!request) {
+      return res.status(404).json({ message: 'Request not found' });
     }
+    res.json({
+      status: request.status,
+      n8nStatus: request.n8nStatus,
+      availableDates: request.availableDates,
+      confirmedDate: request.confirmedDate,
+      interviewId: request.interviewId,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -637,18 +650,18 @@ const getRescheduleStatus = async (req, res) => {
 // @access  Private (HR)
 // ─────────────────────────────────────────────────────────────────────────────
 const updateRescheduleStatus = async (req, res) => {
-    const { status } = req.body;
-    try {
-        const request = await RescheduleRequest.findById(req.params.id);
-        if (!request) {
-            return res.status(404).json({ message: 'Request not found' });
-        }
-        request.status = status;
-        await request.save();
-        res.json(request);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
+  const { status } = req.body;
+  try {
+    const request = await RescheduleRequest.findById(req.params.id);
+    if (!request) {
+      return res.status(404).json({ message: 'Request not found' });
     }
+    request.status = status;
+    await request.save();
+    res.json(request);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -657,27 +670,27 @@ const updateRescheduleStatus = async (req, res) => {
 // @access  Public / Candidate
 // ─────────────────────────────────────────────────────────────────────────────
 const getRescheduleByInterview = async (req, res) => {
-    try {
-        // Find the most recent request for this interview
-        const requests = await RescheduleRequest.find({
-            interviewId: req.params.interviewId
-        })
-            .sort({ createdAt: -1 }) // Get latest first
-            .limit(1);
+  try {
+    // Find the most recent request for this interview
+    const requests = await RescheduleRequest.find({
+      interviewId: req.params.interviewId
+    })
+      .sort({ createdAt: -1 }) // Get latest first
+      .limit(1);
 
-        if (!requests || requests.length === 0) {
-            return res.status(404).json({ message: 'No reschedule requests found for this interview.' });
-        }
-
-        const latest = requests[0];
-        res.json({
-            success: true,
-            data: latest
-        });
-    } catch (error) {
-        console.error("Get Reschedule By Interview Error:", error);
-        res.status(500).json({ message: error.message });
+    if (!requests || requests.length === 0) {
+      return res.status(404).json({ message: 'No reschedule requests found for this interview.' });
     }
+
+    const latest = requests[0];
+    res.json({
+      success: true,
+      data: latest
+    });
+  } catch (error) {
+    console.error("Get Reschedule By Interview Error:", error);
+    res.status(500).json({ message: error.message });
+  }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -686,74 +699,74 @@ const getRescheduleByInterview = async (req, res) => {
 // @access  Public / Candidate
 // ─────────────────────────────────────────────────────────────────────────────
 const confirmRescheduleCandidate = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { confirmedDate } = req.body;
+  try {
+    const { id } = req.params;
+    const { confirmedDate } = req.body;
 
-        if (!confirmedDate) {
-            return res.status(400).json({ success: false, message: 'Missing confirmedDate' });
-        }
+    if (!confirmedDate) {
+      return res.status(400).json({ success: false, message: 'Missing confirmedDate' });
+    }
 
-        const request = await RescheduleRequest.findById(id).populate('interviewId candidateId');
-        if (!request) {
-            return res.status(404).json({ success: false, message: 'Reschedule request not found' });
-        }
+    const request = await RescheduleRequest.findById(id).populate('interviewId candidateId');
+    if (!request) {
+      return res.status(404).json({ success: false, message: 'Reschedule request not found' });
+    }
 
-        // Validate status
-        if (request.status !== 'Action Required') {
-            return res.status(400).json({
-                success: false,
-                message: `Cannot confirm request in status "${request.status}".`
-            });
-        }
+    // Validate status
+    if (request.status !== 'Action Required') {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot confirm request in status "${request.status}".`
+      });
+    }
 
-        // Update request
-        request.status = 'Confirmed';
-        request.n8nStatus = 'confirmed';
-        request.confirmedDate = new Date(confirmedDate);
-        await request.save();
+    // Update request
+    request.status = 'Confirmed';
+    request.n8nStatus = 'confirmed';
+    request.confirmedDate = new Date(confirmedDate);
+    await request.save();
 
-        // Update the interview with the new confirmed date
-        const interview = request.interviewId;
-        if (interview) {
-            interview.status = 'Active';
-            interview.scheduledDate = new Date(confirmedDate);
-            // Extend expiry by 48 hours from the new date
-            interview.expiresAt = new Date(new Date(confirmedDate).getTime() + 48 * 60 * 60 * 1000);
-            await interview.save();
-        }
+    // Update the interview with the new confirmed date
+    const interview = request.interviewId;
+    if (interview) {
+      interview.status = 'Active';
+      interview.scheduledDate = new Date(confirmedDate);
+      // Extend expiry by 48 hours from the new date
+      interview.expiresAt = new Date(new Date(confirmedDate).getTime() + 48 * 60 * 60 * 1000);
+      await interview.save();
+    }
 
-        // ── 1. Trigger n8n Webhook (Create Google Calendar Event) ────────────────
-        // We trigger n8n via POST. n8n workflow has been updated to accept POST and read from body.
-        const n8nConfirmUrl = process.env.N8N_CONFIRM_WEBHOOK_URL;
-        if (n8nConfirmUrl) {
-            try {
-                const payload = {
-                    rescheduleId: request._id,
-                    interviewId: interview._id,
-                    date: confirmedDate,
-                    email: request.candidateId.email,
-                    name: request.candidateId.name,
-                    role: interview.jobRole || interview.role
-                };
-                await axios.post(n8nConfirmUrl, payload);
-                console.log(`✅ N8N Confirmation Webhook triggered for ${request._id}`);
-            } catch (webhookErr) {
-                console.warn('⚠️ Failed to trigger n8n confirmation webhook:', webhookErr.message);
-            }
-        } else {
-            console.warn('⚠️ N8N_CONFIRM_WEBHOOK_URL not set. Skipping calendar event creation.');
-        }
+    // ── 1. Trigger n8n Webhook (Create Google Calendar Event) ────────────────
+    // We trigger n8n via POST. n8n workflow has been updated to accept POST and read from body.
+    const n8nConfirmUrl = process.env.N8N_CONFIRM_WEBHOOK_URL;
+    if (n8nConfirmUrl) {
+      try {
+        const payload = {
+          rescheduleId: request._id,
+          interviewId: interview._id,
+          date: confirmedDate,
+          email: request.candidateId.email,
+          name: request.candidateId.name,
+          role: interview.jobRole || interview.role
+        };
+        await axios.post(n8nConfirmUrl, payload);
+        console.log(`✅ N8N Confirmation Webhook triggered for ${request._id}`);
+      } catch (webhookErr) {
+        console.warn('⚠️ Failed to trigger n8n confirmation webhook:', webhookErr.message);
+      }
+    } else {
+      console.warn('⚠️ N8N_CONFIRM_WEBHOOK_URL not set. Skipping calendar event creation.');
+    }
 
-        // ── 2. Send Rich Confirmation Email ─────────────────────────────────────
-        if (request.candidateId && request.candidateId.email) {
-            const formattedDate = new Date(confirmedDate).toLocaleDateString('en-IN', {
-                weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
-            });
-            const dashboardUrl = process.env.FRONTEND_URL || 'http://localhost:6060/candidate/dashboard';
-            const year = new Date().getFullYear();
+    // ── 2. Send Rich Confirmation Email ─────────────────────────────────────
+    if (request.candidateId && request.candidateId.email) {
+      const formattedDate = new Date(confirmedDate).toLocaleDateString('en-IN', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+      });
+      const dashboardUrl = process.env.FRONTEND_URL || 'http://localhost:6060/candidate/dashboard';
+      const year = new Date().getFullYear();
 
-            const html = `
+      const html = `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -851,31 +864,31 @@ const confirmRescheduleCandidate = async (req, res) => {
 </body>
 </html>`;
 
-            await sendMailNodemailer(
-                request.candidateId.email,
-                `Interview Confirmed – ${interview.jobRole}`,
-                html
-            );
-        }
-
-        console.log(`✅ Reschedule Confirmed by Candidate: ${id} → ${confirmedDate}`);
-        res.json({ success: true, message: 'Reschedule confirmed successfully' });
-
-    } catch (error) {
-        console.error('Candidate Confirm Reschedule Error:', error);
-        res.status(500).json({ success: false, message: error.message });
+      await sendMailNodemailer(
+        request.candidateId.email,
+        `Interview Confirmed – ${interview.jobRole}`,
+        html
+      );
     }
+
+    console.log(`✅ Reschedule Confirmed by Candidate: ${id} → ${confirmedDate}`);
+    res.json({ success: true, message: 'Reschedule confirmed successfully' });
+
+  } catch (error) {
+    console.error('Candidate Confirm Reschedule Error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
 };
 
 module.exports = {
-    getRescheduleRequests,
-    createRescheduleRequest,
-    approveRescheduleRequest,
-    rejectRescheduleRequest,
-    updateRescheduleStatus,
-    confirmReschedule,
-    pendingReschedule,
-    getRescheduleStatus,
-    getRescheduleByInterview,
-    confirmRescheduleCandidate
+  getRescheduleRequests,
+  createRescheduleRequest,
+  approveRescheduleRequest,
+  rejectRescheduleRequest,
+  updateRescheduleStatus,
+  confirmReschedule,
+  pendingReschedule,
+  getRescheduleStatus,
+  getRescheduleByInterview,
+  confirmRescheduleCandidate
 };

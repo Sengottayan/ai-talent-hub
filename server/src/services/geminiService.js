@@ -73,7 +73,7 @@ const axios = require('axios');
  * @param {number|string} duration
  * @returns {Promise<Array<{question: string, type: string}>>}
  */
-async function generateInterviewQuestions(jobRole, jobDescription, interviewType, duration) {
+async function generateInterviewQuestions(jobRole, jobDescription, interviewType, duration, questionCount = 10) {
     try {
         console.log("🔄 Delegating question generation to n8n...");
 
@@ -88,8 +88,8 @@ async function generateInterviewQuestions(jobRole, jobDescription, interviewType
             jobDescription,
             interviewType,
             duration,
-            questionCount: 10,
-            requirements: "Generate 10 static questions based on the role."
+            questionCount: parseInt(questionCount),
+            requirements: `Generate ${questionCount} static questions based on the role.`
         };
 
         console.log(`📤 Sending request to n8n webhook: ${webhookUrl}`);
@@ -143,7 +143,7 @@ async function generateInterviewQuestions(jobRole, jobDescription, interviewType
 
         // Fallback to static questions
         console.log("📝 Using fallback static questions");
-        return [
+        const staticQuestions = [
             { question: "Could you tell me about yourself?", type: "text" },
             { question: "What are your strengths and weaknesses?", type: "text" },
             { question: "Why do you want to join us?", type: "Behavioral" },
@@ -155,6 +155,7 @@ async function generateInterviewQuestions(jobRole, jobDescription, interviewType
             { question: "How do you stay updated with industry trends?", type: "text" },
             { question: "Why should we hire you?", type: "text" }
         ];
+        return staticQuestions.slice(0, questionCount);
     }
 }
 
