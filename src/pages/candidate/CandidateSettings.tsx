@@ -3,8 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Bell, Lock, User, Eye, EyeOff } from "lucide-react";
-import { useState } from "react";
+import { Bell, Lock, User, Eye, EyeOff, FileText, Upload, Loader2, CheckCircle2 } from "lucide-react";
+import { useState, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import axios from "axios";
 
@@ -16,7 +16,9 @@ export default function CandidateSettings() {
     const [passwords, setPasswords] = useState({ new: "" });
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [isUploadingResume, setIsUploadingResume] = useState(false);
     const [notifications, setNotifications] = useState(true);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleUpdatePassword = async () => {
         if (!passwords.new) {
@@ -51,6 +53,43 @@ export default function CandidateSettings() {
             });
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files || !e.target.files[0]) return;
+
+        const file = e.target.files[0];
+        const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+        if (!allowedTypes.includes(file.type)) {
+            toast({ title: "Invalid file type", description: "Please upload a PDF or DOCX file.", variant: "destructive" });
+            return;
+        }
+
+        setIsUploadingResume(true);
+        const formData = new FormData();
+        formData.append('resume', file);
+
+        try {
+            const config = { headers: { Authorization: `Bearer ${userInfo?.token}` } };
+            const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+            const { data } = await axios.post(`${API_URL}/resume/optimize`, formData, config);
+
+            if (data.success) {
+                toast({
+                    title: "Resume Synced",
+                    description: "Your resume profile data has been successfully analyzed and updated.",
+                });
+            }
+        } catch (error: any) {
+            toast({
+                title: "Upload Failed",
+                description: "Failed to upload and analyze your resume.",
+                variant: "destructive"
+            });
+        } finally {
+            setIsUploadingResume(false);
+            if (fileInputRef.current) fileInputRef.current.value = "";
         }
     };
 
@@ -104,6 +143,41 @@ export default function CandidateSettings() {
                                     toast({ title: "Preferences updated", description: `Email alerts ${val ? 'enabled' : 'disabled'}` });
                                 }}
                             />
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <FileText className="h-5 w-5 text-primary" />
+                            Resume Profile
+                        </CardTitle>
+                        <CardDescription>Upload your latest resume to update your profile data.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg bg-muted/10 transition-colors">
+                            <input
+                                type="file"
+                                accept=".pdf,.docx"
+                                className="hidden"
+                                ref={fileInputRef}
+                                onChange={handleResumeUpload}
+                            />
+                            {isUploadingResume ? (
+                                <div className="text-center">
+                                    <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" />
+                                    <p className="text-sm font-medium">Analyzing resume...</p>
+                                </div>
+                            ) : (
+                                <div className="text-center">
+                                    <Upload className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                                    <p className="text-sm font-medium mb-4">Select a PDF or DOCX file to sync latest skills</p>
+                                    <Button onClick={() => fileInputRef.current?.click()} variant="outline">
+                                        Choose File
+                                    </Button>
+                                </div>
+                            )}
                         </div>
                     </CardContent>
                 </Card>

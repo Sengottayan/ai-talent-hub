@@ -30,6 +30,15 @@ export default function CandidateInterviewJoin() {
     // OTP States
     const [showOtpInput, setShowOtpInput] = useState(false);
     const [otp, setOtp] = useState('');
+    const [resendCooldown, setResendCooldown] = useState(0);
+
+    useEffect(() => {
+        let timer: NodeJS.Timeout;
+        if (resendCooldown > 0) {
+            timer = setTimeout(() => setResendCooldown((prev) => prev - 1), 1000);
+        }
+        return () => clearTimeout(timer);
+    }, [resendCooldown]);
 
     useEffect(() => {
         // Check for conflict state from navigation
@@ -104,6 +113,7 @@ export default function CandidateInterviewJoin() {
 
             toast.success('Verification code sent to your email.');
             setShowOtpInput(true);
+            setResendCooldown(60);
         } catch (error: any) {
             console.error(error);
             toast.error(error.response?.data?.message || 'Failed to send verification code.');
@@ -142,6 +152,7 @@ export default function CandidateInterviewJoin() {
                     combinedQuestions: interview.questions || [],
                     activeSection: 'combined' as const,
                 },
+                interviewType: interview.interviewType || interview.type,
                 token: token // Save token for authenticated requests
             };
 
@@ -346,21 +357,32 @@ export default function CandidateInterviewJoin() {
                                     )}
                                 </Button>
                             ) : (
-                                <Button
-                                    size="lg"
-                                    onClick={handleVerifyOtp}
-                                    disabled={joining}
-                                    className="w-full h-11 text-base shadow-lg transition-all bg-green-600 hover:bg-green-700 text-white font-bold"
-                                >
-                                    {joining ? (
-                                        <>
-                                            <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                                            Verifying...
-                                        </>
-                                    ) : (
-                                        'Verify & Join Interview'
-                                    )}
-                                </Button>
+                                <div className="space-y-2">
+                                    <Button
+                                        size="lg"
+                                        onClick={handleVerifyOtp}
+                                        disabled={joining}
+                                        className="w-full h-11 text-base shadow-lg transition-all bg-green-600 hover:bg-green-700 text-white font-bold"
+                                    >
+                                        {joining ? (
+                                            <>
+                                                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                                Verifying...
+                                            </>
+                                        ) : (
+                                            'Verify & Join Interview'
+                                        )}
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={handleRequestOtp}
+                                        disabled={joining || conflict || resendCooldown > 0}
+                                        className="w-full"
+                                    >
+                                        {resendCooldown > 0 ? `Resend Code in ${resendCooldown}s` : 'Resend Code'}
+                                    </Button>
+                                </div>
                             )}
 
                             <p className="text-[10px] text-center text-slate-400 font-medium">

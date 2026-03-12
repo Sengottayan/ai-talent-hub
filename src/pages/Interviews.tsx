@@ -25,6 +25,8 @@ export default function Interviews() {
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 6;
   const { toast } = useToast();
 
   const fetchInterviews = async () => {
@@ -84,6 +86,12 @@ export default function Interviews() {
 
   const scheduledInterviews = interviews.filter((i) => i.status === "Active" || i.status === "Created");
   const pastInterviews = interviews.filter((i) => i.status === "Completed" || i.status === "Terminated");
+
+  const totalPages = Math.ceil(pastInterviews.length / itemsPerPage);
+  const paginatedPastInterviews = pastInterviews.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   if (isLoading) {
     return (
@@ -221,8 +229,8 @@ export default function Interviews() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {pastInterviews.length > 0 ? (
-              pastInterviews.map((interview) => (
+            {paginatedPastInterviews.length > 0 ? (
+              paginatedPastInterviews.map((interview) => (
                 <div
                   key={interview._id}
                   className="flex flex-col gap-4 rounded-lg border border-border p-4 sm:flex-row sm:items-center sm:justify-between opacity-70"
@@ -246,6 +254,30 @@ export default function Interviews() {
               ))
             ) : (
               <p className="text-center py-6 text-sm text-muted-foreground">No past interviews found.</p>
+            )}
+
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-2 pt-4 border-t border-border mt-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </Button>
+                <div className="text-sm font-medium text-muted-foreground">
+                  Page {currentPage} of {totalPages}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                </Button>
+              </div>
             )}
           </div>
         </CardContent>

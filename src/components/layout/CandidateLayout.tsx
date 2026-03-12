@@ -9,7 +9,6 @@ const sidebarItems = [
     { icon: LayoutDashboard, label: "Dashboard", href: "/candidate/dashboard" },
     { icon: FileText, label: "Resume", href: "/candidate/resume" },
     { icon: Video, label: "Mock Interviews", href: "/candidate/mock" },
-    { icon: Briefcase, label: "Jobs", href: "/candidate/jobs" },
     { icon: Award, label: "Skills", href: "/candidate/skills" },
 ];
 

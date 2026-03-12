@@ -21,7 +21,6 @@ import NotFound from ".//pages/NotFound";
 import CandidateDashboard from "./pages/candidate/CandidateDashboard";
 import CandidateResume from "./pages/candidate/CandidateResume";
 import CandidateMock from "./pages/candidate/CandidateMock";
-import CandidateJobs from "./pages/candidate/CandidateJobs";
 import CandidateSkills from "./pages/candidate/CandidateSkills";
 import CandidateSettings from "./pages/candidate/CandidateSettings";
 import InterviewSession from "./pages/candidate/InterviewSession";
@@ -66,7 +65,6 @@ const App = () => (
               <Route path="/candidate/dashboard" element={<CandidateDashboard />} />
               <Route path="/candidate/resume" element={<CandidateResume />} />
               <Route path="/candidate/mock" element={<CandidateMock />} />
-              <Route path="/candidate/jobs" element={<CandidateJobs />} />
               <Route path="/candidate/skills" element={<CandidateSkills />} />
               <Route path="/candidate/settings" element={<CandidateSettings />} />
             </Route>

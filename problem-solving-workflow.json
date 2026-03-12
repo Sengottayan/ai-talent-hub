@@ -1,0 +1,102 @@
+{
+    "name": "Problem Solving Specialist",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "problem-solving/generation",
+                "responseMode": "lastNode",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                250,
+                300
+            ],
+            "id": "webhook-1",
+            "name": "Webhook"
+        },
+        {
+            "parameters": {
+                "promptType": "define",
+                "text": "=Generate {{ $json.body.questionCount }} CODING problems for a {{ $json.body.jobRole }} position based on the following job description:\n\n{{ $json.body.jobDescription }}\n\nInstructions:\n{{ $json.body.requirements }}\n\nStrict Requirements:\n1. Return ONLY a valid JSON array of objects.\n2. Each object must have: \"question\" (string), \"type\": \"Coding\", \"difficulty\" (Easy/Medium/Hard), and \"testCases\".\n3. \"testCases\" MUST be an array of 3-5 objects with \"input\" (string) and \"output\" (expected string output).\n4. Do NOT include markdown code blocks (like ```json). Just raw JSON.",
+                "options": {
+                    "systemMessage": "You are an expert software engineer and specialized technical recruiter. You generate high-quality coding problems with precise test cases."
+                }
+            },
+            "type": "@n8n/n8n-nodes-langchain.agent",
+            "typeVersion": 1.6,
+            "position": [
+                450,
+                300
+            ],
+            "id": "ai-agent-1",
+            "name": "Coding Specialist Agent"
+        },
+        {
+            "parameters": {
+                "jsCode": "const outputText = $input.all()[0].json.output;\n\nlet questions = [];\n\ntry {\n  // Clean up markdown if AI accidentally includes it\n  let cleanText = outputText.replace(/```json/g, '').replace(/```/g, '').trim();\n  questions = JSON.parse(cleanText);\n} catch (e) {\n  console.error(\"JSON Parse Error\", e);\n  // Fallback to empty if critical failure\n  questions = [];\n}\n\n// Ensure structure consistency\nconst validatedQuestions = Array.isArray(questions) ? questions.map(q => ({\n  question: q.question || \"\",\n  type: \"Coding\",\n  difficulty: q.difficulty || \"Medium\",\n  testCases: Array.isArray(q.testCases) ? q.testCases : []\n})) : [];\n\nreturn { questions: validatedQuestions };"
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                650,
+                300
+            ],
+            "id": "code-1",
+            "name": "JSON Validator"
+        },
+        {
+            "parameters": {
+                "model": "llama-3.3-70b-versatile",
+                "options": {
+                    "temperature": 0.4
+                }
+            },
+            "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+            "typeVersion": 1,
+            "position": [
+                450,
+                500
+            ],
+            "id": "groq-model-1",
+            "name": "Groq Llama 3.3"
+        }
+    ],
+    "connections": {
+        "Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "Coding Specialist Agent",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Coding Specialist Agent": {
+            "main": [
+                [
+                    {
+                        "node": "JSON Validator",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Groq Llama 3.3": {
+            "ai_languageModel": [
+                [
+                    {
+                        "node": "Coding Specialist Agent",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    }
+}

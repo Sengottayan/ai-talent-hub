@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,6 +43,7 @@ interface InterviewSession {
 
 export default function CandidateMock() {
     const navigate = useNavigate();
+    const location = useLocation();
     const { toast } = useToast();
 
     const [recentSessions, setRecentSessions] = useState<InterviewSession[]>([]);
@@ -50,9 +51,9 @@ export default function CandidateMock() {
     const [isCreating, setIsCreating] = useState(false);
 
     // Dialog states
-    const [showTailoredDialog, setShowTailoredDialog] = useState(false);
-    const [jobRole, setJobRole] = useState("");
-    const [jobDescription, setJobDescription] = useState("");
+    const [showTailoredDialog, setShowTailoredDialog] = useState(location.state?.autoOpen || false);
+    const [jobRole, setJobRole] = useState(location.state?.jobRole || "");
+    const [jobDescription, setJobDescription] = useState(location.state?.jobDescription || "");
 
     // Fetch recent sessions on mount
     useEffect(() => {
@@ -96,8 +97,21 @@ export default function CandidateMock() {
                     description: `Starting ${data.data.jobRole} interview...`,
                 });
 
-                // Navigate to the interview session
-                navigate(`/interview/${data.data.interviewId}/start`);
+                // Clean out any stale sessions that might force Problem Solving mode
+                const mockInfo = {
+                    email: payload.candidateEmail,
+                    candidate_name: 'Candidate',
+                    interviewType: 'Mock',
+                    job_position: data.data.jobRole,
+                    duration: data.data.duration,
+                    question_list: { combinedQuestions: [] }
+                };
+                sessionStorage.setItem('interviewInfo', JSON.stringify(mockInfo));
+                localStorage.setItem('interviewInfo', JSON.stringify(mockInfo));
+                sessionStorage.setItem('just_joined_interview', 'true');
+
+                // Navigate to the interview prep
+                navigate(`/interview/${data.data.interviewId}/prep`);
             }
         } catch (error: any) {
             console.error("Failed to create mock interview:", error);

@@ -67,20 +67,40 @@ const axios = require('axios');
 
 /**
  * Generates interview questions via N8N Webhook.
+ * Handles specialized prompting for Problem Solving (Coding) questions.
  * @param {string} jobRole
  * @param {string} jobDescription
  * @param {string} interviewType
  * @param {number|string} duration
- * @returns {Promise<Array<{question: string, type: string}>>}
+ * @param {number} questionCount
+ * @returns {Promise<Array<{question: string, type: string, testCases?: Array<{input: string, output: string}>}>>}
  */
 async function generateInterviewQuestions(jobRole, jobDescription, interviewType, duration, questionCount = 10) {
     try {
-        console.log("🔄 Delegating question generation to n8n...");
+        console.log(`🔄 Delegating ${interviewType} question generation...`);
 
-        const webhookUrl = process.env.N8N_QUESTION_WEBHOOK_URL;
+        // Determine which webhook to use: Specific for Problem Solving or Generic
+        let webhookUrl = process.env.N8N_QUESTION_WEBHOOK_URL;
+        if (interviewType === 'Problem Solving' && process.env.N8N_PROBLEM_SOLVING_WEBHOOK_URL) {
+            console.log("🧩 Using dedicated Problem Solving webhook");
+            webhookUrl = process.env.N8N_PROBLEM_SOLVING_WEBHOOK_URL;
+        }
+
         if (!webhookUrl) {
-            console.warn("⚠️  N8N_QUESTION_WEBHOOK_URL is not defined. Falling back to static questions.");
-            throw new Error("N8N Webhook URL missing");
+            console.warn("⚠️ Webhook URL is not defined. Falling back to static questions.");
+            throw new Error("Webhook URL missing");
+        }
+
+        // Create specialized requirements for Problem Solving
+        let requirements = `Generate ${questionCount} static questions based on the role and description.`;
+        if (interviewType === 'Problem Solving') {
+            requirements = `Generate ${questionCount} CODING problems with 3 difficulty levels (Easy, Medium, Hard). 
+            Each problem MUST have:
+            - "question": Detailed problem statement (string).
+            - "difficulty": "Easy", "Medium", or "Hard" (string).
+            - "testCases": Array of 3-5 objects with "input" (string) and "output" (string).
+            - "type": "Coding". 
+            Ensure test cases cover edge cases and logic verification.`;
         }
 
         const payload = {
@@ -89,71 +109,45 @@ async function generateInterviewQuestions(jobRole, jobDescription, interviewType
             interviewType,
             duration,
             questionCount: parseInt(questionCount),
-            requirements: `Generate ${questionCount} static questions based on the role.`
+            requirements
         };
 
-        console.log(`📤 Sending request to n8n webhook: ${webhookUrl}`);
-        console.log(`📦 Payload:`, JSON.stringify(payload, null, 2));
-
         const response = await axios.post(webhookUrl, payload, {
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            timeout: 60000 // 60 second timeout
+            headers: { 'Content-Type': 'application/json' },
+            timeout: 90000 // 90 second timeout for complex coding generation
         });
 
-        console.log(`✅ n8n response status: ${response.status}`);
-        console.log(`📥 n8n response data:`, JSON.stringify(response.data, null, 2));
+        // n8n returns { questions: [...] }
+        const responseData = response.data.questions || response.data.data || response.data || [];
+        const questions = Array.isArray(responseData) ? responseData : [];
 
-        // Expecting response.data to be the array of questions
-        // e.g. [{question: "...", type: "text"}]
-        // Or if n8n returns { data: [...] } or { questions: [...] }
-        const questions = response.data.questions || response.data.data || response.data || [];
-
-        if (Array.isArray(questions) && questions.length > 0) {
-            console.log(`✅ Received ${questions.length} questions from n8n`);
+        if (questions.length > 0) {
             return questions.map(q => ({
-                question: q.question || q,
-                type: q.type || 'text'
+                question: q.question || (typeof q === 'string' ? q : ''),
+                type: q.type || (interviewType === 'Problem Solving' ? 'Coding' : 'Technical'),
+                difficulty: q.difficulty || 'Medium',
+                testCases: Array.isArray(q.testCases) ? q.testCases : []
             }));
         }
 
-        console.warn("⚠️  n8n returned empty or invalid questions array, using fallback");
-        throw new Error("Invalid response from n8n");
-
+        throw new Error("Empty or invalid response from n8n");
     } catch (error) {
-        console.error("❌ N8N generateInterviewQuestions Error:", error.message);
+        console.error("❌ generateInterviewQuestions Error:", error.message);
 
-        if (error.response) {
-            console.error(`   Status: ${error.response.status}`);
-            console.error(`   Status Text: ${error.response.statusText}`);
-            console.error(`   Response Data:`, error.response.data);
-
-            if (error.response.status === 404) {
-                console.error("   💡 Hint: The n8n webhook URL might be incorrect or the workflow is not active.");
-                console.error("   💡 Please check:");
-                console.error("      1. Is the n8n workflow activated?");
-                console.error("      2. Is the webhook path correct in the workflow?");
-                console.error("      3. Is the n8n instance accessible?");
-            }
-        } else if (error.request) {
-            console.error("   ⚠️  No response received from n8n");
-            console.error("   💡 Hint: Check if n8n instance is running and accessible");
-        }
-
-        // Fallback to static questions
-        console.log("📝 Using fallback static questions");
+        // Final fallback aligned with types
         const staticQuestions = [
-            { question: "Could you tell me about yourself?", type: "text" },
-            { question: "What are your strengths and weaknesses?", type: "text" },
-            { question: "Why do you want to join us?", type: "Behavioral" },
-            { question: "Describe a challenging technical problem you solved.", type: "Technical" },
-            { question: "How do you handle tight deadlines?", type: "Behavioral" },
-            { question: "What technologies are you most comfortable with?", type: "Technical" },
-            { question: "Describe a time you worked in a team.", type: "Behavioral" },
-            { question: "What are your career goals?", type: "text" },
-            { question: "How do you stay updated with industry trends?", type: "text" },
-            { question: "Why should we hire you?", type: "text" }
+            {
+                question: "Explain a technical challenge you faced.",
+                type: "Technical",
+                difficulty: "Medium",
+                testCases: []
+            },
+            {
+                question: "How do you handle team conflict?",
+                type: "Behavioral",
+                difficulty: "Easy",
+                testCases: []
+            }
         ];
         return staticQuestions.slice(0, questionCount);
     }

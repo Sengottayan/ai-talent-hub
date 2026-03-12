@@ -24,7 +24,12 @@ const questionSchema = new mongoose.Schema({
         order: {
             type: Number,
             default: 0
-        }
+        },
+        difficulty: String,
+        testCases: [{
+            input: String,
+            output: String
+        }]
     }],
     isActive: {
         type: Boolean,

@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
-const { optimizeResume, analyzeSkillGap, getSkillGaps } = require('../controllers/resumeController');
+const { optimizeResume, analyzeSkillGap, getSkillGaps, getResumeHistory, generateCoverLetter } = require('../controllers/resumeController');
 const { protect } = require('../middleware/authMiddleware');
 
 // Configure Multer for PDF/DOCX uploads
@@ -33,8 +33,10 @@ const upload = multer({
     }
 });
 
-router.post('/optimize', upload.single('resume'), optimizeResume);
+router.post('/optimize', protect, upload.single('resume'), optimizeResume);
 router.post('/skill-gap', protect, upload.single('resume'), analyzeSkillGap);
 router.get('/skill-gap/history', protect, getSkillGaps);
+router.get('/optimize/history', protect, getResumeHistory);
+router.post('/cover-letter', protect, generateCoverLetter);
 
 module.exports = router;

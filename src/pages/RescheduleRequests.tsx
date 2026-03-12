@@ -50,6 +50,8 @@ export default function RescheduleRequests() {
   const [requests, setRequests] = useState<RescheduleRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<Record<string, "approve" | "reject" | null>>({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 6;
   const { toast } = useToast();
 
   const fetchRequests = async () => {
@@ -135,6 +137,13 @@ export default function RescheduleRequests() {
     acc[iid].items.push(req);
     return acc;
   }, {} as Record<string, { details: any; items: RescheduleRequest[] }>);
+
+  const groupedEntries = Object.entries(groupedProcessed);
+  const totalPages = Math.ceil(groupedEntries.length / itemsPerPage);
+  const paginatedGroupedEntries = groupedEntries.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   if (isLoading) {
     return (
@@ -352,70 +361,96 @@ export default function RescheduleRequests() {
         </TabsContent>
 
         <TabsContent value="processed" className="mt-6 space-y-4">
-          {Object.keys(groupedProcessed).length > 0 ? (
-            <Accordion type="multiple" className="space-y-4">
-              {Object.entries(groupedProcessed).map(([iid, group]) => (
-                <AccordionItem key={iid} value={iid} className="border rounded-xl bg-card overflow-hidden">
-                  <AccordionTrigger className="hover:no-underline px-6 py-4 bg-muted/10">
-                    <div className="flex flex-1 items-center justify-between text-left pr-4">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold">Interview:</span>
-                          <span className="font-mono text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">
-                            {iid.slice(-8).toUpperCase()}
-                          </span>
+          {groupedEntries.length > 0 ? (
+            <div className="space-y-4">
+              <Accordion type="multiple" className="space-y-4">
+                {paginatedGroupedEntries.map(([iid, group]) => (
+                  <AccordionItem key={iid} value={iid} className="border rounded-xl bg-card overflow-hidden">
+                    <AccordionTrigger className="hover:no-underline px-6 py-4 bg-muted/10">
+                      <div className="flex flex-1 items-center justify-between text-left pr-4">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold">Interview:</span>
+                            <span className="font-mono text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">
+                              {iid.slice(-8).toUpperCase()}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {group.details?.jobRole || "Role Not Specified"}
+                          </p>
                         </div>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {group.details?.jobRole || "Role Not Specified"}
-                        </p>
+                        <Badge variant="outline" className="bg-white ml-auto">
+                          {group.items.length} Request{group.items.length > 1 ? 's' : ''}
+                        </Badge>
                       </div>
-                      <Badge variant="outline" className="bg-white ml-auto">
-                        {group.items.length} Request{group.items.length > 1 ? 's' : ''}
-                      </Badge>
-                    </div>
-                  </AccordionTrigger>
-                  <AccordionContent className="p-0">
-                    <div className="divide-y divide-border">
-                      {group.items.map((request) => {
-                        const sc = statusConfig[request.status] ?? { label: request.status, className: "bg-muted text-muted-foreground" };
-                        return (
-                          <div
-                            key={request._id}
-                            className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between transition-colors hover:bg-muted/10"
-                          >
-                            <div className="flex items-center gap-4">
-                              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-500">
-                                {request.candidateId?.name?.substring(0, 2).toUpperCase() ?? "CN"}
-                              </div>
-                              <div>
-                                <p className="font-semibold text-foreground text-sm">
-                                  {request.candidateId?.name ?? "Unknown"}
-                                </p>
-                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-0.5">
-                                  <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-                                    <Calendar className="h-3 w-3" />
-                                    Requested: <span className="font-medium">{new Date(request.requestedDate).toLocaleDateString("en-IN", { dateStyle: "medium" })}</span>
+                    </AccordionTrigger>
+                    <AccordionContent className="p-0">
+                      <div className="divide-y divide-border">
+                        {group.items.map((request) => {
+                          const sc = statusConfig[request.status] ?? { label: request.status, className: "bg-muted text-muted-foreground" };
+                          return (
+                            <div
+                              key={request._id}
+                              className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between transition-colors hover:bg-muted/10"
+                            >
+                              <div className="flex items-center gap-4">
+                                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-500">
+                                  {request.candidateId?.name?.substring(0, 2).toUpperCase() ?? "CN"}
+                                </div>
+                                <div>
+                                  <p className="font-semibold text-foreground text-sm">
+                                    {request.candidateId?.name ?? "Unknown"}
                                   </p>
-                                  {request.confirmedDate && (
+                                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-0.5">
                                     <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-                                      <Check className="h-3 w-3 text-success" />
-                                      Confirmed: <span className="font-medium text-success">{new Date(request.confirmedDate).toLocaleDateString("en-IN", { dateStyle: "medium" })}</span>
+                                      <Calendar className="h-3 w-3" />
+                                      Requested: <span className="font-medium">{new Date(request.requestedDate).toLocaleDateString("en-IN", { dateStyle: "medium" })}</span>
                                     </p>
-                                  )}
+                                    {request.confirmedDate && (
+                                      <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                                        <Check className="h-3 w-3 text-success" />
+                                        Confirmed: <span className="font-medium text-success">{new Date(request.confirmedDate).toLocaleDateString("en-IN", { dateStyle: "medium" })}</span>
+                                      </p>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
+                              <Badge variant="outline" className={cn("text-[10px] py-0", sc.className)}>
+                                {sc.label}
+                              </Badge>
                             </div>
-                            <Badge variant="outline" className={cn("text-[10px] py-0", sc.className)}>
-                              {sc.label}
-                            </Badge>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
+                          );
+                        })}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+
+              {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-2 pt-4 border-t border-border mt-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    Previous
+                  </Button>
+                  <div className="text-sm font-medium text-muted-foreground">
+                    Page {currentPage} of {totalPages}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
+            </div>
           ) : (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12 text-center">

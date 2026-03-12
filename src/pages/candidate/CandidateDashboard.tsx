@@ -44,6 +44,9 @@ export default function CandidateDashboard() {
     const [actionRequiredRequest, setActionRequiredRequest] = useState<any>(null);
     const [showActionRequired, setShowActionRequired] = useState(false);
 
+    // Resume Data State
+    const [latestAnalysis, setLatestAnalysis] = useState<any>(null);
+
     const fetchInterviews = async () => {
         try {
             const { data } = await axios.get(`${API_URL}/interviews/my-interviews/${userInfo.email}`);
@@ -55,8 +58,24 @@ export default function CandidateDashboard() {
         }
     };
 
+    const fetchResumeData = async () => {
+        try {
+            const config = { headers: { Authorization: `Bearer ${userInfo?.token}` } };
+            const { data } = await axios.get(`${API_URL}/resume/optimize/history`, config);
+            if (data.success && data.history && data.history.length > 0) {
+                // Get the most recent analysis
+                setLatestAnalysis(data.history[0]);
+            }
+        } catch (error) {
+            console.error("Failed to fetch resume history:", error);
+        }
+    };
+
     useEffect(() => {
-        if (userInfo.email) fetchInterviews();
+        if (userInfo.email) {
+            fetchInterviews();
+            fetchResumeData();
+        }
     }, [userInfo.email]);
 
     const checkRescheduleStatus = async (interview: any) => {
@@ -104,9 +123,9 @@ export default function CandidateDashboard() {
                         <Star className="h-4 w-4 text-warning" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">85%</div>
+                        <div className="text-2xl font-bold">{latestAnalysis ? `${latestAnalysis.atsScore}%` : '0%'}</div>
                         <p className="text-xs text-muted-foreground mt-1 text-success flex items-center gap-1">
-                            <TrendingUp className="h-3 w-3" /> +5% from last week
+                            {latestAnalysis ? <><TrendingUp className="h-3 w-3" /> Profile Analyzed</> : <><TrendingUp className="h-3 w-3" /> New Candidate</>}
                         </p>
                     </CardContent>
                 </Card>
@@ -116,8 +135,8 @@ export default function CandidateDashboard() {
                         <Briefcase className="h-4 w-4 text-primary" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">12</div>
-                        <p className="text-xs text-muted-foreground mt-1">4 pending review</p>
+                        <div className="text-2xl font-bold">0</div>
+                        <p className="text-xs text-muted-foreground mt-1">0 pending review</p>
                     </CardContent>
                 </Card>
                 <Card className="hover:shadow-md transition-shadow">
@@ -138,8 +157,8 @@ export default function CandidateDashboard() {
                         <Trophy className="h-4 w-4 text-warning" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">8</div>
-                        <p className="text-xs text-muted-foreground mt-1">2 new badges earned</p>
+                        <div className="text-2xl font-bold">0</div>
+                        <p className="text-xs text-muted-foreground mt-1">0 new badges earned</p>
                     </CardContent>
                 </Card>
             </div>
@@ -147,41 +166,7 @@ export default function CandidateDashboard() {
             <div className="grid gap-6 lg:grid-cols-7">
                 {/* Left Column */}
                 <div className="lg:col-span-4 space-y-6">
-                    {/* AI Recommended Jobs */}
-                    <Card>
-                        <CardHeader>
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <CardTitle>AI Recommended Jobs</CardTitle>
-                                    <CardDescription>Hand-picked roles based on your skills and preferences</CardDescription>
-                                </div>
-                                <Button variant="ghost" size="sm" className="text-primary">View all <ArrowRight className="ml-2 h-4 w-4" /></Button>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            {[
-                                { title: "Senior AI Engineer", company: "TechFlow Solutions", match: "98%", type: "Remote" },
-                                { title: "Full Stack Developer", company: "Innovate Labs", match: "92%", type: "Hybrid" },
-                                { title: "Product Manager (AI Focus)", company: "SkyNet Systems", match: "89%", type: "On-site" }
-                            ].map((job, i) => (
-                                <div key={i} className="flex items-center justify-between p-4 rounded-xl border bg-muted/30 hover:bg-muted/50 transition-colors group cursor-pointer">
-                                    <div className="flex items-center gap-4">
-                                        <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-                                            <Zap className="h-5 w-5" />
-                                        </div>
-                                        <div>
-                                            <h4 className="font-semibold text-sm">{job.title}</h4>
-                                            <p className="text-xs text-muted-foreground">{job.company} • {job.type}</p>
-                                        </div>
-                                    </div>
-                                    <div className="text-right">
-                                        <div className="text-sm font-bold text-primary">{job.match} Match</div>
-                                        <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity">Apply Now</Button>
-                                    </div>
-                                </div>
-                            ))}
-                        </CardContent>
-                    </Card>
+
 
                     {/* Scheduled Interviews */}
                     <Card>
@@ -271,6 +256,28 @@ export default function CandidateDashboard() {
                             )}
                         </CardContent>
                     </Card>
+
+                    {/* Proactive Tip / Helper Banner */}
+                    <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-100 overflow-hidden relative mt-6">
+                        <div className="absolute right-0 top-0 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl translate-x-10 -translate-y-10" />
+                        <CardContent className="p-6">
+                            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                                <div className="space-y-1 z-10">
+                                    <div className="flex items-center gap-2">
+                                        <Zap className="h-4 w-4 text-blue-600" />
+                                        <h4 className="font-semibold text-blue-900">Need more interview practice?</h4>
+                                    </div>
+                                    <p className="text-sm text-blue-700/80">
+                                        Launch an on-demand AI mock session to sharpen your speaking skills and reduce pre-interview anxiety.
+                                    </p>
+                                </div>
+                                <Button className="shrink-0 bg-blue-600 hover:bg-blue-700 z-10" onClick={() => navigate('/candidate/mock')}>
+                                    <Video className="h-4 w-4 mr-2" />
+                                    Start Mock Interview
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
                 </div>
 
                 {/* Right Column */}
@@ -313,37 +320,32 @@ export default function CandidateDashboard() {
                     <Card>
                         <CardHeader>
                             <CardTitle>Skill Gap Analysis</CardTitle>
-                            <CardDescription>Requirements for your target roles</CardDescription>
+                            <CardDescription>Areas discovered from your resume</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <div className="space-y-2">
-                                <div className="flex items-center justify-between text-sm">
-                                    <span className="font-medium">Python (Advanced)</span>
-                                    <CheckCircle2 className="h-4 w-4 text-success" />
+                            {latestAnalysis ? (
+                                <>
+                                    {latestAnalysis.areasForImprovement?.slice(0, 3).map((area: string, idx: number) => (
+                                        <div key={idx} className="space-y-2">
+                                            <div className="flex items-center justify-between text-sm">
+                                                <span className="font-medium truncate max-w-[200px]" title={area}>{area}</span>
+                                                <span className="text-xs text-warning font-medium">Critical Gap</span>
+                                            </div>
+                                            <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                                                <div className="h-full bg-warning" style={{ width: `${Math.floor(Math.random() * 40) + 30}%` }} />
+                                            </div>
+                                        </div>
+                                    ))}
+                                    <Button variant="link" className="w-full text-xs p-0 h-auto" onClick={() => navigate('/candidate/resume')}>
+                                        View Full Analysis
+                                    </Button>
+                                </>
+                            ) : (
+                                <div className="text-center py-6 text-sm text-muted-foreground border border-dashed rounded-lg bg-muted/20">
+                                    <Zap className="h-8 w-8 text-muted mx-auto mb-2" />
+                                    <p>Upload your resume to see skill gaps</p>
                                 </div>
-                                <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                                    <div className="h-full bg-success w-[95%]" />
-                                </div>
-                            </div>
-                            <div className="space-y-2">
-                                <div className="flex items-center justify-between text-sm">
-                                    <span className="font-medium">Machine Learning</span>
-                                    <span className="text-xs text-muted-foreground">70%</span>
-                                </div>
-                                <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                                    <div className="h-full bg-primary w-[70%]" />
-                                </div>
-                            </div>
-                            <div className="space-y-2">
-                                <div className="flex items-center justify-between text-sm">
-                                    <span className="font-medium">System Design</span>
-                                    <span className="text-xs text-warning font-medium">Critical Gap</span>
-                                </div>
-                                <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                                    <div className="h-full bg-warning w-[45%]" />
-                                </div>
-                            </div>
-                            <Button variant="link" className="w-full text-xs p-0 h-auto">View Learning Roadmap</Button>
+                            )}
                         </CardContent>
                     </Card>
 
@@ -354,17 +356,26 @@ export default function CandidateDashboard() {
                         </CardHeader>
                         <CardContent>
                             <div className="space-y-3">
-                                <div className="flex items-center gap-3">
-                                    <div className="h-8 w-8 rounded-full bg-accent/10 flex items-center justify-center">
-                                        <Trophy className="h-4 w-4 text-accent" />
+                                {latestAnalysis ? (
+                                    <div className="flex items-center gap-3">
+                                        <div className="h-8 w-8 rounded-full bg-success/10 flex items-center justify-center">
+                                            <Trophy className="h-4 w-4 text-success" />
+                                        </div>
+                                        <p className="text-xs font-medium">Resume Score: {latestAnalysis.atsScore}%</p>
                                     </div>
-                                    <p className="text-xs font-medium">Top 5% Resume Score this week</p>
-                                </div>
+                                ) : (
+                                    <div className="flex items-center gap-3">
+                                        <div className="h-8 w-8 rounded-full bg-accent/10 flex items-center justify-center">
+                                            <Trophy className="h-4 w-4 text-accent" />
+                                        </div>
+                                        <p className="text-xs font-medium">Upload Resume to unlock achievements</p>
+                                    </div>
+                                )}
                                 <div className="flex items-center gap-3">
                                     <div className="h-8 w-8 rounded-full bg-accent/10 flex items-center justify-center">
                                         <CheckCircle2 className="h-4 w-4 text-accent" />
                                     </div>
-                                    <p className="text-xs font-medium">Completed 5 Mock Interviews</p>
+                                    <p className="text-xs font-medium">Joined AI Career Network</p>
                                 </div>
                             </div>
                         </CardContent>

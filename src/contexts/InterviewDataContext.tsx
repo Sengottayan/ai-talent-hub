@@ -7,6 +7,7 @@ interface InterviewInfo {
     job_position: string;
     job_description?: string;
     duration?: string;
+    interviewType?: string;
     question_list?: {
         cvQuestions?: any[];
         jdQuestions?: any[];

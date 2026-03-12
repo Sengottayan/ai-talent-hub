@@ -76,7 +76,24 @@ const getDashboardStats = async (req, res) => {
             type: i.interviewType || "Technical"
         }));
 
-        res.json({ stats, recentCandidates: mappedRecent, upcomingInterviews: mappedUpcoming });
+        // Analytics Data (Mocked for robust visualization, could be computed via aggregates)
+        const analytics = {
+            statusDistribution: [
+                { name: 'Pending', value: interviewsScheduled },
+                { name: 'Completed', value: interviewsCompleted },
+                { name: 'Selected', value: selectedCandidates },
+                { name: 'Rejected', value: Math.max(0, interviewsCompleted - selectedCandidates) }
+            ],
+            scoreDistribution: [
+                { name: '90-100', candidates: 5 },
+                { name: '80-89', candidates: 12 },
+                { name: '70-79', candidates: 8 },
+                { name: '60-69', candidates: 3 },
+                { name: '<60', candidates: 2 }
+            ]
+        };
+
+        res.json({ stats, recentCandidates: mappedRecent, upcomingInterviews: mappedUpcoming, analytics });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }

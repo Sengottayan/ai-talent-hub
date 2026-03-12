@@ -405,7 +405,8 @@ INSTRUCTIONS:
                 id: interview.interviewId,
                 candidateName: interview.candidateName || 'Candidate',
                 role: role,
-                status: 'in_progress'
+                status: 'in_progress',
+                interviewType: interview.interviewType
             },
             aiContext: aiContext
         });

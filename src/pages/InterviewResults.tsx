@@ -70,6 +70,9 @@ interface InterviewResult {
     answer: string;
     timestamp?: string;
   }[];
+  interviewType?: string;
+  jobRole?: string;
+  codingSubmission?: any;
 }
 
 export default function InterviewResults() {
@@ -84,6 +87,11 @@ export default function InterviewResults() {
   const [isViolationsOpen, setIsViolationsOpen] = useState(false);
   const [violationEvents, setViolationEvents] = useState<any[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
+
+  // Coding Results Modal State
+  const [isCodingOpen, setIsCodingOpen] = useState(false);
+  const [codingSubmissions, setCodingSubmissions] = useState<any[]>([]);
+  const [loadingCoding, setLoadingCoding] = useState(false);
 
   const fetchResults = async (interviewId?: string) => {
     setIsLoading(true);
@@ -134,6 +142,25 @@ export default function InterviewResults() {
     }
   };
 
+  const fetchCodingSubmissions = async (interviewId: string, email: string) => {
+    setLoadingCoding(true);
+    try {
+      const { data } = await api.get(`/interviews/coding-submissions/${interviewId}/${email}`);
+      if (data.success) {
+        setCodingSubmissions(data.data);
+      }
+    } catch (error) {
+      console.error("Error fetching coding submissions:", error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch coding submissions",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingCoding(false);
+    }
+  };
+
   useEffect(() => {
     fetchResults();
   }, []);
@@ -173,6 +200,12 @@ export default function InterviewResults() {
     setSelectedResult(result);
     setIsViolationsOpen(true);
     fetchViolationEvents(result.interview_id, result.email);
+  };
+
+  const openCoding = (result: InterviewResult) => {
+    setSelectedResult(result);
+    setIsCodingOpen(true);
+    fetchCodingSubmissions(result.interview_id, result.email);
   };
 
   const getScoreColor = (score: number, maxScore: number) => {
@@ -269,6 +302,18 @@ export default function InterviewResults() {
                         <span className="mx-2">•</span>
                         {result.email}
                       </CardDescription>
+                      <div className="mt-1 flex gap-2">
+                        {result.interviewType && (
+                          <span className="inline-flex items-center rounded-md bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-800">
+                            {result.interviewType}
+                          </span>
+                        )}
+                        {result.jobRole && (
+                          <span className="inline-flex items-center rounded-md bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
+                            {result.jobRole}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="text-right flex items-center gap-4">
@@ -291,6 +336,17 @@ export default function InterviewResults() {
                         <AlertTriangle className="w-3 h-3 text-amber-600" />
                         Violations Log
                       </Button>
+                      {result.interviewType === 'Problem Solving' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full text-xs flex items-center gap-2 border-indigo-200 hover:bg-indigo-50 text-indigo-700"
+                          onClick={() => openCoding(result)}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+                          View Code
+                        </Button>
+                      )}
                     </div>
                     <div className="bg-white p-2 rounded-lg border border-border min-w-[80px]">
                       <p className="text-2xl font-bold text-foreground">
@@ -643,6 +699,77 @@ export default function InterviewResults() {
                 <CheckCircle className="w-10 h-10 text-green-500 mx-auto mb-3 opacity-20" />
                 <p className="text-sm font-medium text-slate-900">Perfect Focus!</p>
                 <p className="text-xs text-slate-500 mt-1">No violations or focus loss detected for this session.</p>
+              </div>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Coding Submissions Modal */}
+      <Dialog open={isCodingOpen} onOpenChange={setIsCodingOpen}>
+        <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-indigo-100 rounded-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-indigo-600"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+              </div>
+              <div>
+                <DialogTitle>Coding Responses</DialogTitle>
+                <DialogDescription>
+                  Code submissions and test cases for {selectedResult?.candidate_name}
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <ScrollArea className="flex-1 pr-4">
+            {loadingCoding ? (
+              <div className="flex justify-center py-20">
+                <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+              </div>
+            ) : codingSubmissions.length > 0 ? (
+              <div className="space-y-6 py-4">
+                {codingSubmissions.map((sub, idx) => (
+                  <Card key={idx} className="overflow-hidden">
+                    <CardHeader className="bg-muted/30 pb-3">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <CardTitle className="text-base">Question {sub.questionIndex + 1}</CardTitle>
+                          <p className="text-sm border-l-2 pl-3 mt-2 font-medium">{sub.question}</p>
+                        </div>
+                        <span className={`px-2 py-1 rounded text-xs font-bold ${sub.allPassed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                          {sub.allPassed ? 'ALL PASSED' : 'TESTS FAILED'}
+                        </span>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <div className="bg-[#1e1e1e] p-4 text-[#d4d4d4] font-mono text-xs overflow-x-auto">
+                        <pre><code>{sub.code}</code></pre>
+                      </div>
+
+                      <div className="p-4 bg-slate-50 border-t">
+                        <h5 className="text-xs font-bold text-slate-500 uppercase mb-2 outline-none">Test Cases</h5>
+                        <div className="grid gap-2">
+                          {sub.results && sub.results.map((tc: any, tIdx: number) => (
+                            <div key={tIdx} className={`p-2 rounded text-xs border ${tc.passed ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}`}>
+                              <span className="font-bold mr-2">Test {tIdx + 1}:</span> {tc.passed ? '✅ Passed' : '❌ Failed'}
+                              {!tc.passed && (
+                                <div className="mt-2 text-[11px] grid grid-cols-2 gap-2">
+                                  <div><span className="font-bold text-slate-500">Expected:</span> <br />{tc.expectedOutput}</div>
+                                  <div><span className="font-bold text-slate-500">Output:</span> <br />{tc.actualOutput}</div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-10 text-muted-foreground italic">
+                No coding submissions recorded for this session.
               </div>
             )}
           </ScrollArea>

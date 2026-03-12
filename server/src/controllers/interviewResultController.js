@@ -7,151 +7,187 @@ const { sendMailNodemailer } = require('../utils/sendMailNodemailer');
 // @route   GET /api/interviews/results/all
 // @access  Private
 const getAllResults = async (req, res) => {
-    try {
-        const results = await InterviewResult.find({
-            interview_id: { $not: /^mock-/ }
-        }).sort({ createdAt: -1 });
-        res.json(results);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
+  try {
+    const results = await InterviewResult.aggregate([
+      { $match: { interview_id: { $not: /^mock-/ } } },
+      { $sort: { createdAt: -1 } },
+      {
+        $lookup: {
+          from: "interviews",
+          localField: "interview_id",
+          foreignField: "interviewId",
+          as: "interviewData"
+        }
+      },
+      {
+        $addFields: {
+          interviewType: { $arrayElemAt: ["$interviewData.interviewType", 0] },
+          jobRole: { $arrayElemAt: ["$interviewData.jobRole", 0] }
+        }
+      },
+      { $project: { interviewData: 0 } }
+    ]);
+    res.json(results);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
 };
 const getResultsByInterview = async (req, res) => {
-    try {
-        const results = await InterviewResult.find({
-            interview_id: req.params.interviewId,
-            $and: [{ interview_id: { $not: /^mock-/ } }]
-        });
-        res.json(results);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
+  try {
+    const results = await InterviewResult.aggregate([
+      {
+        $match: {
+          interview_id: req.params.interviewId,
+          $and: [{ interview_id: { $not: /^mock-/ } }]
+        }
+      },
+      { $sort: { createdAt: -1 } },
+      {
+        $lookup: {
+          from: "interviews",
+          localField: "interview_id",
+          foreignField: "interviewId",
+          as: "interviewData"
+        }
+      },
+      {
+        $addFields: {
+          interviewType: { $arrayElemAt: ["$interviewData.interviewType", 0] },
+          jobRole: { $arrayElemAt: ["$interviewData.jobRole", 0] }
+        }
+      },
+      { $project: { interviewData: 0 } }
+    ]);
+    res.json(results);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
 };
 
 // @desc    Create or update interview result
 // @route   POST /api/interviews/results
 // @access  Private
 const upsertResult = async (req, res) => {
-    let {
+  let {
+    interview_id,
+    candidate_id,
+    email,
+    candidate_name,
+    fullname,
+    scores,
+    evaluation_summary,
+    decision,
+    feedback,
+    strengths,
+    improvements,
+    n8n_evaluation
+  } = req.body;
+
+  try {
+    // Fallback: If email is missing, try to get it from the interview
+    if (!email && interview_id) {
+      // Try by custom interviewId (a UUID string) first
+      let interviewDef = await Interview.findOne({ interviewId: interview_id });
+
+      // If not found, and it looks like a Mongo ID, fallback to findById
+      if (!interviewDef && mongoose.Types.ObjectId.isValid(interview_id)) {
+        interviewDef = await Interview.findById(interview_id);
+      }
+
+      if (interviewDef && interviewDef.candidateEmail) {
+        email = interviewDef.candidateEmail;
+        console.log(`ℹ️ Recovered missing email from Interview: ${email}`);
+      }
+    }
+
+    console.log(`📥 Upserting result for interview: ${interview_id}, email: ${email}`);
+
+    // Support lookup by candidate_id OR email
+    const query = { interview_id };
+    if (candidate_id && mongoose.Types.ObjectId.isValid(candidate_id)) {
+      query.candidate_id = candidate_id;
+    } else if (email) {
+      query.email = email.toLowerCase().trim();
+    }
+
+    // Handle n8n evaluation structure (mapping its custom keys to our model)
+    if (n8n_evaluation) {
+      // Allow both object and stringified JSON
+      if (typeof n8n_evaluation === 'string') {
+        try { n8n_evaluation = JSON.parse(n8n_evaluation); } catch (e) { }
+      }
+
+      if (typeof n8n_evaluation === 'object') {
+        evaluation_summary = n8n_evaluation.summary || evaluation_summary;
+        strengths = n8n_evaluation.strengths || strengths;
+        improvements = n8n_evaluation.growth_areas || n8n_evaluation.improvements || improvements;
+
+        // If n8n provides a suitability_score, we can map it to our internal scores
+        if (n8n_evaluation.suitability_score && !scores) {
+          scores = { "Final Recruiter Score": n8n_evaluation.suitability_score };
+        }
+      }
+    }
+
+    let result = await InterviewResult.findOne(query);
+    let previousDecision = result ? result.decision : 'pending';
+
+    if (result) {
+      result.scores = scores || result.scores;
+      result.evaluation_summary = evaluation_summary || result.evaluation_summary;
+      result.decision = decision || result.decision;
+      result.feedback = feedback || result.feedback;
+      result.strengths = (strengths && strengths.length > 0) ? strengths : result.strengths;
+      result.improvements = (improvements && improvements.length > 0) ? improvements : result.improvements;
+      result.n8n_evaluation = n8n_evaluation || result.n8n_evaluation;
+
+      // Sync rating object if n8n provides score
+      if (n8n_evaluation?.suitability_score) {
+        result.rating = result.rating || {};
+        result.rating.technical = n8n_evaluation.suitability_score;
+      }
+
+      await result.save();
+      console.log(`✅ Result updated for ${email}`);
+    } else {
+      result = await InterviewResult.create({
         interview_id,
-        candidate_id,
-        email,
-        candidate_name,
-        fullname,
-        scores,
+        candidate_id: mongoose.Types.ObjectId.isValid(candidate_id) ? candidate_id : undefined,
+        email: email?.toLowerCase().trim(),
+        candidate_name: candidate_name || fullname || 'Candidate',
+        fullname: fullname || candidate_name || 'Candidate',
+        scores: scores || {},
         evaluation_summary,
-        decision,
+        decision: decision || 'pending',
         feedback,
-        strengths,
-        improvements,
-        n8n_evaluation
-    } = req.body;
+        strengths: strengths || [],
+        improvements: improvements || [],
+        n8n_evaluation,
+        isCompleted: true,
+        completedAt: new Date()
+      });
+      console.log(`✨ New result created for ${email}`);
+    }
 
-    try {
-        // Fallback: If email is missing, try to get it from the interview
-        if (!email && interview_id) {
-            // Try by custom interviewId (a UUID string) first
-            let interviewDef = await Interview.findOne({ interviewId: interview_id });
+    // ─── SEND EMAIL NOTIFICATION IF DECISION CHANGED TO SELECTED/REJECTED ───
+    if (email && decision && (decision.toLowerCase() !== previousDecision.toLowerCase())) {
 
-            // If not found, and it looks like a Mongo ID, fallback to findById
-            if (!interviewDef && mongoose.Types.ObjectId.isValid(interview_id)) {
-                interviewDef = await Interview.findById(interview_id);
-            }
+      // Re-fetch interview to get job role if possible
+      let jobRole = "the position";
+      const interviewInfo = await Interview.findOne(
+        mongoose.Types.ObjectId.isValid(interview_id) ? { _id: interview_id } : { interviewId: interview_id }
+      );
+      if (interviewInfo && (interviewInfo.jobRole || interviewInfo.role)) {
+        jobRole = interviewInfo.jobRole || interviewInfo.role;
+      }
 
-            if (interviewDef && interviewDef.candidateEmail) {
-                email = interviewDef.candidateEmail;
-                console.log(`ℹ️ Recovered missing email from Interview: ${email}`);
-            }
-        }
+      const candidateName = candidate_name || fullname || "Candidate";
+      const year = new Date().getFullYear();
+      const dashboardUrl = process.env.FRONTEND_URL || 'http://localhost:6060';
 
-        console.log(`📥 Upserting result for interview: ${interview_id}, email: ${email}`);
-
-        // Support lookup by candidate_id OR email
-        const query = { interview_id };
-        if (candidate_id && mongoose.Types.ObjectId.isValid(candidate_id)) {
-            query.candidate_id = candidate_id;
-        } else if (email) {
-            query.email = email.toLowerCase().trim();
-        }
-
-        // Handle n8n evaluation structure (mapping its custom keys to our model)
-        if (n8n_evaluation) {
-            // Allow both object and stringified JSON
-            if (typeof n8n_evaluation === 'string') {
-                try { n8n_evaluation = JSON.parse(n8n_evaluation); } catch (e) { }
-            }
-
-            if (typeof n8n_evaluation === 'object') {
-                evaluation_summary = n8n_evaluation.summary || evaluation_summary;
-                strengths = n8n_evaluation.strengths || strengths;
-                improvements = n8n_evaluation.growth_areas || n8n_evaluation.improvements || improvements;
-
-                // If n8n provides a suitability_score, we can map it to our internal scores
-                if (n8n_evaluation.suitability_score && !scores) {
-                    scores = { "Final Recruiter Score": n8n_evaluation.suitability_score };
-                }
-            }
-        }
-
-        let result = await InterviewResult.findOne(query);
-        let previousDecision = result ? result.decision : 'pending';
-
-        if (result) {
-            result.scores = scores || result.scores;
-            result.evaluation_summary = evaluation_summary || result.evaluation_summary;
-            result.decision = decision || result.decision;
-            result.feedback = feedback || result.feedback;
-            result.strengths = (strengths && strengths.length > 0) ? strengths : result.strengths;
-            result.improvements = (improvements && improvements.length > 0) ? improvements : result.improvements;
-            result.n8n_evaluation = n8n_evaluation || result.n8n_evaluation;
-
-            // Sync rating object if n8n provides score
-            if (n8n_evaluation?.suitability_score) {
-                result.rating = result.rating || {};
-                result.rating.technical = n8n_evaluation.suitability_score;
-            }
-
-            await result.save();
-            console.log(`✅ Result updated for ${email}`);
-        } else {
-            result = await InterviewResult.create({
-                interview_id,
-                candidate_id: mongoose.Types.ObjectId.isValid(candidate_id) ? candidate_id : undefined,
-                email: email?.toLowerCase().trim(),
-                candidate_name: candidate_name || fullname || 'Candidate',
-                fullname: fullname || candidate_name || 'Candidate',
-                scores: scores || {},
-                evaluation_summary,
-                decision: decision || 'pending',
-                feedback,
-                strengths: strengths || [],
-                improvements: improvements || [],
-                n8n_evaluation,
-                isCompleted: true,
-                completedAt: new Date()
-            });
-            console.log(`✨ New result created for ${email}`);
-        }
-
-        // ─── SEND EMAIL NOTIFICATION IF DECISION CHANGED TO SELECTED/REJECTED ───
-        if (email && decision && (decision.toLowerCase() !== previousDecision.toLowerCase())) {
-
-            // Re-fetch interview to get job role if possible
-            let jobRole = "the position";
-            const interviewInfo = await Interview.findOne(
-                mongoose.Types.ObjectId.isValid(interview_id) ? { _id: interview_id } : { interviewId: interview_id }
-            );
-            if (interviewInfo && (interviewInfo.jobRole || interviewInfo.role)) {
-                jobRole = interviewInfo.jobRole || interviewInfo.role;
-            }
-
-            const candidateName = candidate_name || fullname || "Candidate";
-            const year = new Date().getFullYear();
-            const dashboardUrl = process.env.FRONTEND_URL || 'http://localhost:6060';
-
-            // ─── SELECTED ───
-            if (decision.toLowerCase() === 'selected') {
-                const html = `
+      // ─── SELECTED ───
+      if (decision.toLowerCase() === 'selected') {
+        const html = `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -240,17 +276,17 @@ const upsertResult = async (req, res) => {
 </body>
 </html>`;
 
-                await sendMailNodemailer(
-                    email,
-                    `🎉 Offer: You have been selected for ${jobRole}`,
-                    html
-                );
-                console.log(`📧 Selection email sent to ${email}`);
-            }
+        await sendMailNodemailer(
+          email,
+          `🎉 Offer: You have been selected for ${jobRole}`,
+          html
+        );
+        console.log(`📧 Selection email sent to ${email}`);
+      }
 
-            // ─── REJECTED ───
-            else if (decision.toLowerCase() === 'rejected') {
-                const html = `
+      // ─── REJECTED ───
+      else if (decision.toLowerCase() === 'rejected') {
+        const html = `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -328,24 +364,24 @@ const upsertResult = async (req, res) => {
 </body>
 </html>`;
 
-                await sendMailNodemailer(
-                    email,
-                    `Update regarding your interview for ${jobRole}`,
-                    html
-                );
-                console.log(`📧 Rejection email sent to ${email}`);
-            }
-        }
-
-        res.status(201).json(result);
-    } catch (error) {
-        console.error('❌ Upsert Result Error:', error);
-        res.status(500).json({ message: error.message });
+        await sendMailNodemailer(
+          email,
+          `Update regarding your interview for ${jobRole}`,
+          html
+        );
+        console.log(`📧 Rejection email sent to ${email}`);
+      }
     }
+
+    res.status(201).json(result);
+  } catch (error) {
+    console.error('❌ Upsert Result Error:', error);
+    res.status(500).json({ message: error.message });
+  }
 };
 
 module.exports = {
-    getAllResults,
-    getResultsByInterview,
-    upsertResult
+  getAllResults,
+  getResultsByInterview,
+  upsertResult
 };

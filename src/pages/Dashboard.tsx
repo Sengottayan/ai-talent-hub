@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { FileText, Users, Calendar, CheckCircle, UserCheck } from "lucide-react";
 import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import api from "@/lib/api";
 
 const iconMap: { [key: string]: any } = {
@@ -38,7 +39,10 @@ export default function Dashboard() {
     const [stats, setStats] = useState<Stat[]>([]);
     const [recentCandidates, setRecentCandidates] = useState<Candidate[]>([]);
     const [upcomingInterviews, setUpcomingInterviews] = useState<Interview[]>([]);
+    const [analytics, setAnalytics] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
+
+    const COLORS = ['#0ea5e9', '#10b981', '#6366f1', '#f43f5e', '#f59e0b'];
 
     useEffect(() => {
         const fetchStats = async () => {
@@ -47,6 +51,7 @@ export default function Dashboard() {
                 setStats(data.stats);
                 setRecentCandidates(data.recentCandidates);
                 setUpcomingInterviews(data.upcomingInterviews);
+                setAnalytics(data.analytics);
             } catch (error) {
                 console.error("Failed to fetch dashboard stats:", error);
             } finally {
@@ -87,6 +92,61 @@ export default function Dashboard() {
                     );
                 })}
             </div>
+
+            {/* Analytics Grid */}
+            {analytics && (
+                <div className="grid gap-6 lg:grid-cols-2">
+                    <Card className="animate-fade-in shadow-sm">
+                        <CardHeader>
+                            <CardTitle className="text-lg font-semibold">Candidate Pipeline Status</CardTitle>
+                            <CardDescription>Live breakdown of all candidate progression stages</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="h-[250px] w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                        <Pie
+                                            data={analytics.statusDistribution}
+                                            cx="50%"
+                                            cy="50%"
+                                            innerRadius={60}
+                                            outerRadius={80}
+                                            paddingAngle={5}
+                                            dataKey="value"
+                                            label={({ name, value }) => `${name}: ${value}`}
+                                        >
+                                            {analytics.statusDistribution.map((entry: any, index: number) => (
+                                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="animate-fade-in shadow-sm">
+                        <CardHeader>
+                            <CardTitle className="text-lg font-semibold">AI Assessment Scores</CardTitle>
+                            <CardDescription>Overall performance distribution across technical rounds</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="h-[250px] w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={analytics.scoreDistribution} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                        <XAxis dataKey="name" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
+                                        <YAxis tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
+                                        <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '8px' }} />
+                                        <Bar dataKey="candidates" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
 
             {/* Content Grid */}
             <div className="grid gap-6 lg:grid-cols-2">

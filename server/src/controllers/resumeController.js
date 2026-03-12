@@ -3,6 +3,7 @@ const pdf = require("pdf-parse");
 const mammoth = require("mammoth");
 const fs = require("fs");
 const SkillGap = require("../models/SkillGap");
+const ResumeAnalysis = require("../models/ResumeAnalysis");
 
 // Helper for Text Extraction
 const extractText = async (file) => {
@@ -24,6 +25,8 @@ const optimizeResume = async (req, res) => {
             return res.status(400).json({ message: "No file uploaded" });
         }
 
+        const { targetJobDescription } = req.body;
+
         const resumeText = await extractText(req.file);
         if (!resumeText) {
             return res.status(400).json({ message: "Could not extract text from file." });
@@ -32,6 +35,8 @@ const optimizeResume = async (req, res) => {
         const prompt = `
             You are an expert technical recruiter and ATS (Applicant Tracking System) specialist.
             Analyze the following resume text and provide a detailed optimization report in JSON format.
+            
+            ${targetJobDescription ? `Target Job Description:\n${targetJobDescription}\n\nNote: Please score and evaluate the resume specifically against this job description.` : ''}
             
             Resume Text:
             ${resumeText.substring(0, 15000)}
@@ -43,6 +48,7 @@ const optimizeResume = async (req, res) => {
             4. "kpiSuggestions": (an array of 3 specific quantifiable examples)
             5. "suggestedKeywords": (an array of important technical keywords)
             6. "overallFeedback": (a detailed summary string)
+            7. "bulletPointRewrites": (an array of exactly 3 objects with "original" and "rewrite" keys, taking weak bullet points from the resume and rewriting them to be impact-driven and quantifiable)
 
             Return ONLY a raw JSON object. No markdown, no backticks.
         `;
@@ -60,9 +66,18 @@ const optimizeResume = async (req, res) => {
 
         const analysis = JSON.parse(completion.choices[0].message.content);
 
+        let savedId = null;
+        if (req.user && req.user._id) {
+            const entry = await ResumeAnalysis.create({
+                candidateId: req.user._id,
+                ...analysis
+            });
+            savedId = entry._id;
+        }
+
         if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
 
-        res.json({ success: true, analysis });
+        res.json({ success: true, analysis, savedId });
 
     } catch (error) {
         console.error("Resume Optimization Error:", error);
@@ -151,4 +166,54 @@ const getSkillGaps = async (req, res) => {
     }
 };
 
-module.exports = { optimizeResume, analyzeSkillGap, getSkillGaps };
+const getResumeHistory = async (req, res) => {
+    try {
+        const candidateId = req.user._id;
+        const history = await ResumeAnalysis.find({ candidateId }).sort({ createdAt: -1 });
+        res.json({ success: true, history });
+    } catch (error) {
+        res.status(500).json({ message: "Failed to fetch history.", error: error.message });
+    }
+};
+
+const generateCoverLetter = async (req, res) => {
+    try {
+        const { targetJobDescription, keyStrengths, overallFeedback } = req.body;
+
+        const prompt = `
+            You are an expert career coach and technical writer.
+            Write a professional, compelling cover letter for a candidate applying to the following job description.
+
+            Target Job Description (Optional - use general tech framing if missing):
+            ${targetJobDescription || 'Not provided'}
+
+            Candidate's Key Strengths:
+            ${(keyStrengths || []).join(', ')}
+
+            Overall Assessment Profile:
+            ${overallFeedback || ''}
+
+            Format: Give ONLY the raw cover letter text. Keep it strictly to 3 paragraphs: Hook, Value Proposition (using strengths), and Call to Action. Do not include placeholders for [Your Name] at the bottom, just return the body content that the candidate can copy-paste.
+        `;
+
+        const groq = new OpenAI({
+            apiKey: process.env.GROQ_API_KEY,
+            baseURL: "https://api.groq.com/openai/v1"
+        });
+
+        const completion = await groq.chat.completions.create({
+            messages: [{ role: "user", content: prompt }],
+            model: "llama-3.3-70b-versatile",
+        });
+
+        const coverLetter = completion.choices[0].message.content;
+
+        res.json({ success: true, coverLetter });
+
+    } catch (error) {
+        console.error("Cover Letter Generator Error:", error);
+        res.status(500).json({ message: "Failed to generate cover letter.", error: error.message });
+    }
+};
+
+module.exports = { optimizeResume, analyzeSkillGap, getSkillGaps, getResumeHistory, generateCoverLetter };

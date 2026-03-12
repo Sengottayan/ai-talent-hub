@@ -1,16 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Textarea } from '@/components/ui/textarea';
+import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import axios from 'axios';
-import { Loader2, Code, Send, Clock } from 'lucide-react';
+import { Loader2, Code, Play, Send, Clock, TerminalSquare } from 'lucide-react';
 import InterviewHeader from '@/components/interview/InterviewHeader';
 import TimerComponent from '@/components/interview/TimerComponent';
 import { useInterviewData } from '@/contexts/InterviewDataContext';
 import { logger } from '@/lib/logger';
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import Editor from "@monaco-editor/react";
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
@@ -31,10 +32,14 @@ export default function CandidateInterviewCoding() {
 
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
+    const [running, setRunning] = useState(false);
     const [question, setQuestion] = useState<any>(null);
     const [code, setCode] = useState('');
     const [language, setLanguage] = useState('javascript');
-    const [explanation, setExplanation] = useState('');
+
+    // Output state
+    const [output, setOutput] = useState('');
+    const [errorOutput, setErrorOutput] = useState('');
 
     useEffect(() => {
         if (!interviewInfo) {
@@ -43,19 +48,57 @@ export default function CandidateInterviewCoding() {
             return;
         }
 
-        // Get coding question from interview info
         const codingQ = interviewInfo.question_list?.codingQuestion;
         if (codingQ) {
             setQuestion(codingQ);
+
+            // Set basic starter code based on language
+            const defaultCode = `// Write your ${language} code here\n\n`;
+            setCode(defaultCode);
+
         } else {
-            // If no coding question, skip to completion
             toast.info('No coding round for this interview');
             navigate(`/interview/${id}/completed`);
             return;
         }
 
         setLoading(false);
-    }, [interviewInfo, id, navigate]);
+    }, [interviewInfo, id, navigate, language]);
+
+    const handleRunCode = async () => {
+        if (!code.trim()) {
+            toast.error('Please write some code before running');
+            return;
+        }
+
+        setRunning(true);
+        setOutput('Executing code...\n');
+        setErrorOutput('');
+
+        try {
+            const formData = new FormData();
+            formData.append('interview_id', id || '');
+            formData.append('email', interviewInfo?.email || '');
+            formData.append('language', language);
+            formData.append('code', code);
+
+            const response = await axios.post(`${API_URL}/api/interviews/coding-execute`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+
+            if (response.data.success) {
+                setOutput(response.data.output || 'Code executed successfully with no output.');
+                setErrorOutput(response.data.stderr || '');
+            } else {
+                setErrorOutput(response.data.message || 'Execution failed.');
+            }
+        } catch (error: any) {
+            logger.error('Failed to run code:', error);
+            setErrorOutput(error.response?.data?.message || 'Failed to run code. Please try again.');
+        } finally {
+            setRunning(false);
+        }
+    };
 
     const handleSubmit = async () => {
         if (!code.trim()) {
@@ -66,6 +109,7 @@ export default function CandidateInterviewCoding() {
         setSubmitting(true);
 
         try {
+            // Option to run code one last time on submit (can customize this)
             await axios.post(`${API_URL}/api/interviews/coding-submission`, {
                 interview_id: id,
                 email: interviewInfo?.email,
@@ -74,7 +118,8 @@ export default function CandidateInterviewCoding() {
                     question: question?.question || question?.title,
                     code,
                     language,
-                    explanation,
+                    output,
+                    errorOutput,
                     submittedAt: new Date().toISOString(),
                 },
             });
@@ -82,7 +127,6 @@ export default function CandidateInterviewCoding() {
             logger.log('✅ Coding submission saved');
             toast.success('Code submitted successfully!');
 
-            // Navigate to completion
             setTimeout(() => {
                 navigate(`/interview/${id}/completed`);
             }, 1000);
@@ -100,163 +144,204 @@ export default function CandidateInterviewCoding() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-violet-50/30 flex items-center justify-center">
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <Loader2 className="w-8 h-8 animate-spin text-violet-600" />
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-violet-50/30">
-            <InterviewHeader />
+        <div className="h-screen flex flex-col bg-slate-50 overflow-hidden">
+            {/* Header Area */}
+            <div className="flex-none">
+                <InterviewHeader />
+            </div>
 
-            <div className="container mx-auto px-4 py-6 max-w-6xl">
-                <div className="space-y-6">
-
-                    {/* Header */}
-                    <Card className="border-violet-200 bg-white/80 backdrop-blur-sm">
-                        <CardHeader className="flex flex-row items-center justify-between">
-                            <div>
-                                <CardTitle className="text-2xl font-bold bg-gradient-to-r from-violet-600 to-purple-600 bg-clip-text text-transparent flex items-center gap-2">
-                                    <Code className="w-6 h-6 text-violet-600" />
-                                    Coding Round
-                                </CardTitle>
-                                <p className="text-slate-600 mt-1">Write your solution below</p>
-                            </div>
-
-                            {interviewInfo && (
-                                <TimerComponent
-                                    interviewId={id!}
-                                    duration="30 minutes"
-                                    onTimeout={handleSubmit}
-                                    userEmail={interviewInfo.email}
-                                />
-                            )}
-                        </CardHeader>
-                    </Card>
-
-                    {/* Question */}
-                    <Card className="shadow-lg border-violet-100">
-                        <CardHeader>
-                            <CardTitle className="text-lg">Problem Statement</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="prose prose-slate max-w-none">
-                                <p className="text-slate-800 leading-relaxed whitespace-pre-wrap">
-                                    {question?.question || question?.title || question?.description}
-                                </p>
-
-                                {question?.examples && (
-                                    <div className="mt-4 p-4 bg-slate-50 rounded-lg">
-                                        <div className="font-semibold text-sm text-slate-700 mb-2">Examples:</div>
-                                        <pre className="text-sm text-slate-800 whitespace-pre-wrap">
-                                            {question.examples}
-                                        </pre>
-                                    </div>
-                                )}
-
-                                {question?.constraints && (
-                                    <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-                                        <div className="font-semibold text-sm text-blue-700 mb-2">Constraints:</div>
-                                        <p className="text-sm text-blue-800">{question.constraints}</p>
-                                    </div>
-                                )}
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* Code Editor */}
-                    <Card className="shadow-lg border-violet-100">
-                        <CardHeader>
-                            <div className="flex items-center justify-between">
-                                <CardTitle className="text-lg">Your Solution</CardTitle>
-                                <Select value={language} onValueChange={setLanguage}>
-                                    <SelectTrigger className="w-40">
-                                        <SelectValue placeholder="Language" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {LANGUAGES.map((lang) => (
-                                            <SelectItem key={lang.value} value={lang.value}>
-                                                {lang.label}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            <Textarea
-                                value={code}
-                                onChange={(e) => setCode(e.target.value)}
-                                placeholder="Write your code here..."
-                                className="min-h-[400px] font-mono text-sm"
-                                disabled={submitting}
-                            />
-                        </CardContent>
-                    </Card>
-
-                    {/* Explanation */}
-                    <Card className="shadow-lg border-violet-100">
-                        <CardHeader>
-                            <CardTitle className="text-lg">Explanation (Optional)</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <Textarea
-                                value={explanation}
-                                onChange={(e) => setExplanation(e.target.value)}
-                                placeholder="Explain your approach, time complexity, space complexity, etc."
-                                className="min-h-[150px]"
-                                disabled={submitting}
-                            />
-                        </CardContent>
-                    </Card>
-
-                    {/* Actions */}
-                    <Card className="shadow-lg border-violet-100">
-                        <CardContent className="p-6">
-                            <div className="flex items-center justify-between gap-4">
-                                <Button
-                                    variant="outline"
-                                    size="lg"
-                                    onClick={handleSkip}
-                                    disabled={submitting}
-                                >
-                                    Skip Coding Round
-                                </Button>
-
-                                <Button
-                                    size="lg"
-                                    onClick={handleSubmit}
-                                    disabled={submitting}
-                                    className="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700"
-                                >
-                                    {submitting ? (
-                                        <>
-                                            <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                                            Submitting...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Send className="w-5 h-5 mr-2" />
-                                            Submit Solution
-                                        </>
-                                    )}
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* Info */}
-                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                        <div className="flex items-start gap-3">
-                            <Clock className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                            <div className="text-sm text-blue-800">
-                                <div className="font-semibold mb-1">Time Limit</div>
-                                <div>You have 30 minutes to complete this coding challenge. Your solution will be auto-submitted when time expires.</div>
-                            </div>
-                        </div>
-                    </div>
+            {/* Top Toolbar */}
+            <div className="flex-none bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between shadow-sm z-10">
+                <div className="flex items-center gap-3">
+                    <Code className="w-5 h-5 text-violet-600" />
+                    <span className="font-semibold text-lg text-slate-800">Coding Assessment</span>
                 </div>
+
+                <div className="flex items-center gap-4">
+                    {interviewInfo && (
+                        <div className="bg-blue-50 text-blue-800 px-3 py-1.5 rounded-full text-sm font-medium border border-blue-100 flex items-center gap-2">
+                            <Clock className="w-4 h-4" />
+                            <TimerComponent
+                                interviewId={id!}
+                                duration="45 minutes"
+                                onTimeout={handleSubmit}
+                                userEmail={interviewInfo.email}
+                            />
+                        </div>
+                    )}
+
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleSkip}
+                        disabled={submitting || running}
+                        className="text-slate-500"
+                    >
+                        Skip
+                    </Button>
+                </div>
+            </div>
+
+            {/* Split View */}
+            <div className="flex-1 overflow-hidden p-2">
+                <ResizablePanelGroup direction="horizontal" className="h-full w-full rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden">
+                    {/* Left Panel: Problem Description */}
+                    <ResizablePanel defaultSize={40} minSize={30} className="bg-white overflow-hidden flex flex-col">
+                        <div className="p-4 bg-slate-50 border-b border-slate-200 flex-none">
+                            <h2 className="text-xl font-bold text-slate-800">Problem Statement</h2>
+                        </div>
+                        <div className="p-6 overflow-y-auto flex-1 prose prose-slate max-w-none">
+                            <h3 className="text-xl font-semibold mb-4 text-violet-900 border-b pb-2">
+                                {question?.title || "Coding Challenge"}
+                            </h3>
+
+                            <div className="text-slate-700 leading-relaxed whitespace-pre-wrap font-medium">
+                                {question?.question || question?.description}
+                            </div>
+
+                            {question?.examples && (
+                                <div className="mt-8">
+                                    <h4 className="font-bold text-slate-800 mb-3">Examples:</h4>
+                                    <div className="bg-slate-100 rounded-md p-4 text-sm font-mono text-slate-800 whitespace-pre-wrap border border-slate-200">
+                                        {question.examples}
+                                    </div>
+                                </div>
+                            )}
+
+                            {question?.constraints && (
+                                <div className="mt-8">
+                                    <h4 className="font-bold text-slate-800 mb-3">Constraints:</h4>
+                                    <ul className="bg-yellow-50 rounded-md p-4 text-sm text-yellow-900 border border-yellow-200 list-disc pl-6 space-y-1">
+                                        <li>{question.constraints}</li>
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
+                    </ResizablePanel>
+
+                    <ResizableHandle withHandle />
+
+                    {/* Right Panel: Editor & Console */}
+                    <ResizablePanel defaultSize={60} minSize={30}>
+                        <ResizablePanelGroup direction="vertical" className="h-full">
+
+                            {/* Editor Area */}
+                            <ResizablePanel defaultSize={70} minSize={20} className="flex flex-col bg-[#1e1e1e]">
+                                {/* Editor Toolbar */}
+                                <div className="flex items-center justify-between px-4 py-2 bg-[#2d2d2d] border-b border-[#444] flex-none">
+                                    <Select value={language} onValueChange={setLanguage}>
+                                        <SelectTrigger className="w-40 h-8 bg-[#3c3c3c] text-slate-200 border-[#555] focus:ring-1 focus:ring-violet-500">
+                                            <SelectValue placeholder="Language" />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-[#2d2d2d] text-slate-200 border-[#444]">
+                                            {LANGUAGES.map((lang) => (
+                                                <SelectItem
+                                                    key={lang.value}
+                                                    value={lang.value}
+                                                    className="focus:bg-[#3c3c3c] focus:text-white cursor-pointer"
+                                                >
+                                                    {lang.label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            size="sm"
+                                            variant="secondary"
+                                            onClick={handleRunCode}
+                                            disabled={running || submitting}
+                                            className="bg-slate-200 hover:bg-white text-slate-800 font-medium px-4 h-8"
+                                        >
+                                            {running ? (
+                                                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                            ) : (
+                                                <Play className="w-4 h-4 mr-2" />
+                                            )}
+                                            Run Code
+                                        </Button>
+
+                                        <Button
+                                            size="sm"
+                                            onClick={handleSubmit}
+                                            disabled={submitting || running}
+                                            className="bg-green-600 hover:bg-green-500 text-white font-medium px-4 h-8"
+                                        >
+                                            {submitting ? (
+                                                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                            ) : (
+                                                <Send className="w-4 h-4 mr-2" />
+                                            )}
+                                            Submit
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                {/* Monaco Editor */}
+                                <div className="flex-1 overflow-hidden relative">
+                                    <Editor
+                                        height="100%"
+                                        language={language}
+                                        value={code}
+                                        onChange={(val) => setCode(val || '')}
+                                        theme="vs-dark"
+                                        options={{
+                                            minimap: { enabled: false },
+                                            fontSize: 14,
+                                            lineHeight: 24,
+                                            padding: { top: 16 },
+                                            scrollBeyondLastLine: false,
+                                            smoothScrolling: true,
+                                            cursorBlinking: "smooth",
+                                            cursorSmoothCaretAnimation: "on",
+                                            formatOnPaste: true,
+                                            wordWrap: "on"
+                                        }}
+                                    />
+                                </div>
+                            </ResizablePanel>
+
+                            <ResizableHandle withHandle className="bg-[#444]" />
+
+                            {/* Console/Output Area */}
+                            <ResizablePanel defaultSize={30} minSize={10} className="bg-[#1e1e1e] flex flex-col">
+                                <div className="px-4 py-2 bg-[#2d2d2d] border-b border-[#444] flex items-center justify-between flex-none">
+                                    <div className="flex items-center gap-2 text-slate-300 text-sm font-medium">
+                                        <TerminalSquare className="w-4 h-4" />
+                                        Test Results
+                                    </div>
+                                </div>
+                                <div className="flex-1 overflow-y-auto p-4 font-mono text-sm">
+                                    {!output && !errorOutput && !running && (
+                                        <div className="text-slate-500 italic h-full flex items-center justify-center">
+                                            Run your code to see outputs here.
+                                        </div>
+                                    )}
+                                    {running && (
+                                        <div className="text-slate-400 animate-pulse">
+                                            Executing and evaluating test cases...
+                                        </div>
+                                    )}
+                                    {output && !running && (
+                                        <pre className="text-green-400 whitespace-pre-wrap mb-4 font-mono">{output}</pre>
+                                    )}
+                                    {errorOutput && !running && (
+                                        <pre className="text-red-400 whitespace-pre-wrap font-mono mt-2">{errorOutput}</pre>
+                                    )}
+                                </div>
+                            </ResizablePanel>
+
+                        </ResizablePanelGroup>
+                    </ResizablePanel>
+                </ResizablePanelGroup>
             </div>
         </div>
     );

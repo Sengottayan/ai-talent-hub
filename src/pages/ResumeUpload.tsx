@@ -13,9 +13,16 @@ import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
+type TestCase = {
+    input: string;
+    output: string;
+}
+
 type Question = {
     question: string;
     type: string;
+    difficulty?: string;
+    testCases?: TestCase[];
 }
 
 export default function ResumeUpload() {
@@ -45,6 +52,7 @@ export default function ResumeUpload() {
     // Editor State (Step 2)
     const [newQuestion, setNewQuestion] = useState("");
     const [newQuestionType, setNewQuestionType] = useState("Technical");
+    const [newTestCases, setNewTestCases] = useState<TestCase[]>([{ input: "", output: "" }]);
 
     // AI Job Description Generator State
     const [showAIDialog, setShowAIDialog] = useState(false);
@@ -117,8 +125,16 @@ export default function ResumeUpload() {
             toast({ title: "Empty Question", description: "Please enter a question text.", variant: "destructive" });
             return;
         }
-        setGeneratedQuestions([...generatedQuestions, { question: newQuestion, type: newQuestionType }]);
+        const questionPayload: Question = { question: newQuestion, type: newQuestionType };
+        if (newQuestionType === 'Problem Solving') {
+            const validTestCases = newTestCases.filter(tc => tc.input.trim() || tc.output.trim());
+            if (validTestCases.length > 0) {
+                questionPayload.testCases = validTestCases;
+            }
+        }
+        setGeneratedQuestions([...generatedQuestions, questionPayload]);
         setNewQuestion("");
+        setNewTestCases([{ input: "", output: "" }]);
         toast({ title: "Question Added", description: "Successfully added to the list." });
     };
 
@@ -484,6 +500,43 @@ Format it in a clear, professional manner suitable for a job posting.`;
                                     <PlusIcon className="w-4 h-4 mr-2" /> Add
                                 </Button>
                             </div>
+                            {newQuestionType === 'Problem Solving' && (
+                                <div className="mt-4 space-y-3 p-4 bg-muted/30 rounded-lg border border-border">
+                                    <h4 className="text-sm font-semibold text-foreground">Test Cases (for code evaluation)</h4>
+                                    {newTestCases.map((tc, index) => (
+                                        <div key={index} className="flex gap-3">
+                                            <Input
+                                                placeholder="Input (e.g., 'hello')"
+                                                value={tc.input}
+                                                onChange={(e) => {
+                                                    const updated = [...newTestCases];
+                                                    updated[index].input = e.target.value;
+                                                    setNewTestCases(updated);
+                                                }}
+                                                className="flex-1 text-sm bg-background"
+                                            />
+                                            <Input
+                                                placeholder="Output (e.g., 'hello')"
+                                                value={tc.output}
+                                                onChange={(e) => {
+                                                    const updated = [...newTestCases];
+                                                    updated[index].output = e.target.value;
+                                                    setNewTestCases(updated);
+                                                }}
+                                                className="flex-1 text-sm bg-background"
+                                            />
+                                            {newTestCases.length > 1 && (
+                                                <Button variant="ghost" size="icon" onClick={() => setNewTestCases(newTestCases.filter((_, i) => i !== index))}>
+                                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                                </Button>
+                                            )}
+                                        </div>
+                                    ))}
+                                    <Button variant="outline" size="sm" onClick={() => setNewTestCases([...newTestCases, { input: "", output: "" }])}>
+                                        <PlusIcon className="h-4 w-4 mr-1" /> Add Test Case
+                                    </Button>
+                                </div>
+                            )}
                         </div>
 
                         {/* Questions List */}
@@ -498,9 +551,21 @@ Format it in a clear, professional manner suitable for a job posting.`;
                                                 </span>
                                                 <div className="flex-1 min-w-0">
                                                     <p className="font-medium text-foreground leading-relaxed">{item.question}</p>
-                                                    <span className="inline-flex items-center mt-2 px-2.5 py-0.5 rounded-full text-xs font-medium bg-secondary text-secondary-foreground capitalize">
-                                                        {item.type}
-                                                    </span>
+                                                    <div className="flex gap-2 mt-2">
+                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-secondary text-secondary-foreground capitalize">
+                                                            {item.type}
+                                                        </span>
+                                                        {item.difficulty && (
+                                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${item.difficulty === 'Hard' ? 'bg-red-100 text-red-700' : item.difficulty === 'Medium' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
+                                                                {item.difficulty}
+                                                            </span>
+                                                        )}
+                                                        {item.testCases && item.testCases.length > 0 && (
+                                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                                                                {item.testCases.length} Test Cases
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>

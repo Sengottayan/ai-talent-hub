@@ -75,7 +75,12 @@ const interviewSchema = new mongoose.Schema({
     }],
     questions: [{
         question: String,
-        type: { type: String, default: 'text' }
+        type: { type: String, default: 'text' },
+        difficulty: String,
+        testCases: [{
+            input: String,
+            output: String
+        }]
     }],
     scheduledDate: {
         type: Date

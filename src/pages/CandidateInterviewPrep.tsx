@@ -343,7 +343,13 @@ export default function CandidateInterviewPrep() {
                                     <PermissionStatus status={cameraPermission} label="Camera" icon={Camera} />
                                     <PermissionStatus status={micPermission} label="Microphone" icon={Mic} />
 
-                                    {!canStart && (
+                                    {(cameraPermission !== 'granted' || micPermission !== 'granted') && (
+                                        <div className="text-sm text-amber-600 bg-amber-50 p-3 rounded-lg border border-amber-200">
+                                            <strong>Action Required:</strong> If devices are not active, please permit Camera & Microphone in your browser (lock icon), then click Retry.
+                                        </div>
+                                    )}
+
+                                    {(!canStart || cameraPermission !== 'granted' || micPermission !== 'granted') && (
                                         <Button
                                             onClick={requestPermissions}
                                             disabled={checking}
@@ -357,13 +363,13 @@ export default function CandidateInterviewPrep() {
                                             ) : (
                                                 <>
                                                     <CheckCircle2 className="w-5 h-5 mr-2" />
-                                                    Grant Permissions
+                                                    {(cameraPermission !== 'granted' || micPermission !== 'granted') ? 'Retry Device Check' : 'Grant Permissions'}
                                                 </>
                                             )}
                                         </Button>
                                     )}
 
-                                    {canStart && (
+                                    {(canStart && cameraPermission !== 'denied' && micPermission !== 'denied') && (
                                         <Button
                                             onClick={handleStartInterview}
                                             className="w-full h-12 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
