@@ -25,7 +25,8 @@ export default function Interviews() {
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState<string | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [pendingPage, setPendingPage] = useState(1);
+  const [pastPage, setPastPage] = useState(1);
   const itemsPerPage = 6;
   const { toast } = useToast();
 
@@ -87,10 +88,16 @@ export default function Interviews() {
   const scheduledInterviews = interviews.filter((i) => i.status === "Active" || i.status === "Created");
   const pastInterviews = interviews.filter((i) => i.status === "Completed" || i.status === "Terminated");
 
-  const totalPages = Math.ceil(pastInterviews.length / itemsPerPage);
+  const totalPendingPages = Math.ceil(scheduledInterviews.length / itemsPerPage);
+  const paginatedScheduledInterviews = scheduledInterviews.slice(
+    (pendingPage - 1) * itemsPerPage,
+    pendingPage * itemsPerPage
+  );
+
+  const totalPastPages = Math.ceil(pastInterviews.length / itemsPerPage);
   const paginatedPastInterviews = pastInterviews.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
+    (pastPage - 1) * itemsPerPage,
+    pastPage * itemsPerPage
   );
 
   if (isLoading) {
@@ -158,8 +165,8 @@ export default function Interviews() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {scheduledInterviews.length > 0 ? (
-              scheduledInterviews.map((interview) => (
+            {paginatedScheduledInterviews.length > 0 ? (
+              paginatedScheduledInterviews.map((interview) => (
                 <div
                   key={interview._id}
                   className="flex flex-col gap-4 rounded-xl border border-border p-5 transition-all hover:border-primary/50 hover:shadow-md sm:flex-row sm:items-center sm:justify-between"
@@ -218,6 +225,30 @@ export default function Interviews() {
                 <p className="text-muted-foreground text-sm">No pending interviews found.</p>
               </div>
             )}
+
+            {totalPendingPages > 1 && (
+              <div className="flex items-center justify-center gap-2 pt-4 border-t border-border mt-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPendingPage(p => Math.max(1, p - 1))}
+                  disabled={pendingPage === 1}
+                >
+                  Previous
+                </Button>
+                <div className="text-sm font-medium text-muted-foreground">
+                  Page {pendingPage} of {totalPendingPages}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPendingPage(p => Math.min(totalPendingPages, p + 1))}
+                  disabled={pendingPage === totalPendingPages}
+                >
+                  Next
+                </Button>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -256,24 +287,24 @@ export default function Interviews() {
               <p className="text-center py-6 text-sm text-muted-foreground">No past interviews found.</p>
             )}
 
-            {totalPages > 1 && (
+            {totalPastPages > 1 && (
               <div className="flex items-center justify-center gap-2 pt-4 border-t border-border mt-4">
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
+                  onClick={() => setPastPage(p => Math.max(1, p - 1))}
+                  disabled={pastPage === 1}
                 >
                   Previous
                 </Button>
                 <div className="text-sm font-medium text-muted-foreground">
-                  Page {currentPage} of {totalPages}
+                  Page {pastPage} of {totalPastPages}
                 </div>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
+                  onClick={() => setPastPage(p => Math.min(totalPastPages, p + 1))}
+                  disabled={pastPage === totalPastPages}
                 >
                   Next
                 </Button>

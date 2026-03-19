@@ -9,6 +9,7 @@ import {
     Phone,
     PhoneOff,
     Mic,
+    Code,
     AlertCircle,
     CheckCircle
 } from 'lucide-react';
@@ -454,11 +455,17 @@ export default function CandidateInterviewStart() {
     // Auto-start hook
     useEffect(() => {
         if (!loading && readyToStart && !callActive && !isStartingRef.current && !showGate) {
-            if (interviewInfo?.interviewType !== 'Problem Solving') {
+            // Check if there are voice questions (non-coding)
+            const questions = aiContext?.questions || interviewInfo?.question_list?.combinedQuestions || [];
+            const hasVoiceQuestions = questions.some((q: any) => 
+                q.type !== 'Coding' && q.type !== 'Problem Solving'
+            );
+
+            if (hasVoiceQuestions || interviewInfo?.interviewType !== 'Problem Solving') {
                 const timer = setTimeout(() => startCall(), 1500);
                 return () => clearTimeout(timer);
             } else {
-                // For problem-solving, just mark timer start without initiating AI call
+                // For pure coding interviews, just mark timer start without initiating AI call
                 if (!serverStartTime) {
                     const now = Date.now();
                     setServerStartTime(now);
@@ -466,7 +473,7 @@ export default function CandidateInterviewStart() {
                 }
             }
         }
-    }, [loading, readyToStart, callActive, showGate, interviewInfo, serverStartTime, id]);
+    }, [loading, readyToStart, callActive, showGate, interviewInfo, serverStartTime, id, aiContext]);
 
     const stopInterview = () => {
         const client = getRetellClient();
@@ -526,119 +533,163 @@ export default function CandidateInterviewStart() {
                 />
             )}
             <div className="container mx-auto px-4 py-8 max-w-7xl">
-                {interviewInfo?.interviewType === 'Problem Solving' ? (
-                    <div className="flex flex-col h-[calc(100vh-100px)]">
-                        <div className="flex justify-between items-center mb-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-                            <Button variant="destructive" onClick={() => setShowExitConfirm(true)} className="font-bold">
-                                End Interview
-                            </Button>
-                            {interviewInfo && (
-                                <TimerComponent
-                                    interviewId={id!}
-                                    duration={interviewInfo.duration ? String(interviewInfo.duration).replace(/\D/g, '') : '15'}
-                                    onTimeout={() => finalizeInterview('timeout')}
-                                    userEmail={interviewInfo.email}
-                                    serverStartTime={serverStartTime}
-                                />
-                            )}
-                        </div>
-                        <CodingConsole
-                            questions={aiContext?.questions || interviewInfo.question_list?.combinedQuestions || []}
-                            interviewId={id!}
-                            candidateEmail={interviewInfo.email}
-                            candidateName={interviewInfo.candidate_name}
-                            onComplete={() => finalizeInterview('coding_completed')}
-                        />
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        <div className="lg:col-span-2 space-y-6">
-                            <Card className="overflow-hidden border-none shadow-xl">
-                                <CardContent className="p-0 relative">
-                                    <div className="aspect-video bg-slate-900 group">
-                                        <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover -scale-x-100" />
-                                        <div className="absolute top-4 left-4 flex gap-2">
-                                            <div className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-2 ${callActive ? 'bg-red-500 text-white animate-pulse' : 'bg-slate-700/80 text-white backdrop-blur-md'}`}>
-                                                <div className={`w-2 h-2 rounded-full ${callActive ? 'bg-white' : 'bg-slate-400'}`} />
-                                                {callActive ? 'Live Interview' : 'Initializing...'}
-                                            </div>
-                                        </div>
-                                        {isSpeaking && (
-                                            <div className="absolute bottom-6 left-6 bg-blue-600/90 text-white px-4 py-2 rounded-2xl backdrop-blur-md border border-blue-400/30 flex items-center gap-2 animate-in slide-in-from-bottom-4">
-                                                <Mic className="w-4 h-4" />
-                                                <span className="text-sm font-medium">AI is speaking...</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                </CardContent>
-                            </Card>
+                {/* 
+                    Mixed Flow logic: 
+                    Identify if we have coding questions 
+                */}
+                {(() => {
+                    const questions = aiContext?.questions || interviewInfo?.question_list?.combinedQuestions || [];
+                    const hasCoding = questions.some((q: any) => q.type === 'Coding' || q.type === 'Problem Solving');
+                    const hasVoice = questions.some((q: any) => q.type !== 'Coding' && q.type !== 'Problem Solving');
 
-                            <Card className="border-none shadow-lg bg-white/80 backdrop-blur-md">
-                                <CardContent className="p-6">
-                                    <div className="flex items-center justify-between gap-6">
-                                        <div className="flex items-center gap-4">
-                                            {!callActive ? (
-                                                <Button size="lg" onClick={startCall} className="bg-blue-600 hover:bg-blue-700 px-8 py-6 h-auto text-lg font-bold rounded-2xl shadow-lg shadow-blue-200">
-                                                    <Phone className="mr-2" /> {isRestoring ? 'Resume Session' : 'Start Session'}
-                                                </Button>
-                                            ) : (
-                                                <Button variant="destructive" size="lg" onClick={() => setShowExitConfirm(true)} className="px-8 py-6 h-auto text-lg font-bold rounded-2xl">
-                                                    <PhoneOff className="mr-2" /> End Interview
-                                                </Button>
+                    if (interviewInfo?.interviewType === 'Problem Solving' || (hasCoding && !hasVoice)) {
+                        return (
+                            <div className="flex flex-col h-[calc(100vh-100px)]">
+                                <div className="flex justify-between items-center mb-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                                    <Button variant="destructive" onClick={() => setShowExitConfirm(true)} className="font-bold">
+                                        End Interview
+                                    </Button>
+                                    {interviewInfo && (
+                                        <TimerComponent
+                                            interviewId={id!}
+                                            duration={interviewInfo.duration ? String(interviewInfo.duration).replace(/\D/g, '') : '15'}
+                                            onTimeout={() => finalizeInterview('timeout')}
+                                            userEmail={interviewInfo.email}
+                                            serverStartTime={serverStartTime}
+                                        />
+                                    )}
+                                </div>
+                                <CodingConsole
+                                    questions={questions.filter((q: any) => q.type === 'Coding' || q.type === 'Problem Solving')}
+                                    interviewId={id!}
+                                    candidateEmail={interviewInfo.email}
+                                    candidateName={interviewInfo.candidate_name}
+                                    onComplete={() => finalizeInterview('coding_completed')}
+                                />
+                            </div>
+                        );
+                    }
+
+                    // Standard Grid Layout for Voice or Mixed
+                    return (
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                            <div className="lg:col-span-2 space-y-6">
+                                <Card className="overflow-hidden border-none shadow-xl">
+                                    <CardContent className="p-0 relative">
+                                        <div className="aspect-video bg-slate-900 group">
+                                            <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover -scale-x-100" />
+                                            <div className="absolute top-4 left-4 flex gap-2">
+                                                <div className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-2 ${callActive ? 'bg-red-500 text-white animate-pulse' : 'bg-slate-700/80 text-white backdrop-blur-md'}`}>
+                                                    <div className={`w-2 h-2 rounded-full ${callActive ? 'bg-white' : 'bg-slate-400'}`} />
+                                                    {callActive ? 'Live Interview' : 'Initializing...'}
+                                                </div>
+                                            </div>
+                                            {isSpeaking && (
+                                                <div className="absolute bottom-6 left-6 bg-blue-600/90 text-white px-4 py-2 rounded-2xl backdrop-blur-md border border-blue-400/30 flex items-center gap-2 animate-in slide-in-from-bottom-4">
+                                                    <Mic className="w-4 h-4" />
+                                                    <span className="text-sm font-medium">AI is speaking...</span>
+                                                </div>
                                             )}
                                         </div>
-                                        {interviewInfo && (
-                                            <TimerComponent
-                                                interviewId={id!}
-                                                duration={interviewInfo.duration ? String(interviewInfo.duration) : '15'}
-                                                onTimeout={() => finalizeInterview('timeout')}
-                                                userEmail={interviewInfo.email}
-                                                serverStartTime={serverStartTime}
-                                            />
-                                        )}
-                                    </div>
-                                </CardContent>
-                            </Card>
+                                    </CardContent>
+                                </Card>
 
-                            {currentMessage && (
-                                <div className="bg-blue-600 text-white p-6 rounded-3xl shadow-lg border border-blue-400/30 animate-in fade-in slide-in-from-top-4">
-                                    <p className="text-lg font-medium leading-relaxed italic">"{currentMessage}"</p>
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="space-y-6">
-                            <Card className="h-[calc(100vh-250px)] border-none shadow-xl flex flex-col">
-                                <CardContent className="p-6 flex flex-col h-full">
-                                    <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
-                                        <Loader2 className={`w-5 h-5 ${callActive ? 'animate-spin' : ''} text-blue-600`} />
-                                        Live Transcript
-                                    </h3>
-                                    <div className="flex-1 overflow-y-auto pr-2 space-y-4">
-                                        {transcript.length === 0 ? (
-                                            <div className="text-center py-20 opacity-30 italic">No context yet...</div>
-                                        ) : (
-                                            transcript.map((msg, i) => (
-                                                <div key={i} className={`p-4 rounded-2xl ${msg.role === 'assistant' ? 'bg-blue-50 ml-0 border-l-4 border-blue-500' : 'bg-slate-50 ml-4 border-l-4 border-slate-300'}`}>
-                                                    <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">{msg.role === 'assistant' ? 'HireAI' : 'Candidate'}</div>
-                                                    <p className="text-sm text-slate-700 leading-relaxed font-medium">{msg.content}</p>
+                                {hasCoding && (
+                                    <div className="mt-4 animate-in slide-in-from-bottom-5 duration-700">
+                                        <Card className="border-violet-200 bg-violet-50/50">
+                                            <CardContent className="p-4">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="p-2 bg-violet-600 rounded-lg">
+                                                            <Code className="w-5 h-5 text-white" />
+                                                        </div>
+                                                        <div>
+                                                            <h4 className="font-bold text-slate-800">Coding Assignment</h4>
+                                                            <p className="text-xs text-slate-500 font-medium">Solve the coding tasks below while staying on the call.</p>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                            ))
-                                        )}
+                                                <div className="mt-4 h-[400px]">
+                                                    <CodingConsole
+                                                        questions={questions.filter((q: any) => q.type === 'Coding' || q.type === 'Problem Solving')}
+                                                        interviewId={id!}
+                                                        candidateEmail={interviewInfo.email}
+                                                        candidateName={interviewInfo.candidate_name}
+                                                        onComplete={() => {}} // Handle implicitly
+                                                    />
+                                                </div>
+                                            </CardContent>
+                                        </Card>
                                     </div>
-                                </CardContent>
-                            </Card>
+                                )}
 
-                            <div className="p-5 bg-amber-50 rounded-2xl border border-amber-100 flex gap-4">
-                                <AlertCircle className="text-amber-500 shrink-0 mt-1" />
-                                <div className="text-sm text-amber-900 leading-snug">
-                                    <span className="font-extrabold block mb-1">Stay Within View</span>
-                                    Ensure you remain in the center of the frame and keep this tab active to avoid flags.
+                                <Card className="border-none shadow-lg bg-white/80 backdrop-blur-md">
+                                    <CardContent className="p-6">
+                                        <div className="flex items-center justify-between gap-6">
+                                            <div className="flex items-center gap-4">
+                                                {!callActive ? (
+                                                    <Button size="lg" onClick={startCall} className="bg-blue-600 hover:bg-blue-700 px-8 py-6 h-auto text-lg font-bold rounded-2xl shadow-lg shadow-blue-200">
+                                                        <Phone className="mr-2" /> {isRestoring ? 'Resume Session' : 'Start Session'}
+                                                    </Button>
+                                                ) : (
+                                                    <Button variant="destructive" size="lg" onClick={() => setShowExitConfirm(true)} className="px-8 py-6 h-auto text-lg font-bold rounded-2xl">
+                                                        <PhoneOff className="mr-2" /> End Interview
+                                                    </Button>
+                                                )}
+                                            </div>
+                                            {interviewInfo && (
+                                                <TimerComponent
+                                                    interviewId={id!}
+                                                    duration={interviewInfo.duration ? String(interviewInfo.duration) : '15'}
+                                                    onTimeout={() => finalizeInterview('timeout')}
+                                                    userEmail={interviewInfo.email}
+                                                    serverStartTime={serverStartTime}
+                                                />
+                                            )}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+
+                                {currentMessage && (
+                                    <div className="bg-blue-600 text-white p-6 rounded-3xl shadow-lg border border-blue-400/30 animate-in fade-in slide-in-from-top-4">
+                                        <p className="text-lg font-medium leading-relaxed italic">"{currentMessage}"</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="space-y-6">
+                                <Card className="h-[calc(100vh-250px)] border-none shadow-xl flex flex-col">
+                                    <CardContent className="p-6 flex flex-col h-full">
+                                        <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
+                                            <Loader2 className={`w-5 h-5 ${callActive ? 'animate-spin' : ''} text-blue-600`} />
+                                            Live Transcript
+                                        </h3>
+                                        <div className="flex-1 overflow-y-auto pr-2 space-y-4">
+                                            {transcript.length === 0 ? (
+                                                <div className="text-center py-20 opacity-30 italic">No context yet...</div>
+                                            ) : (
+                                                transcript.map((msg, i) => (
+                                                    <div key={i} className={`p-4 rounded-2xl ${msg.role === 'assistant' ? 'bg-blue-50 ml-0 border-l-4 border-blue-500' : 'bg-slate-50 ml-4 border-l-4 border-slate-300'}`}>
+                                                        <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">{msg.role === 'assistant' ? 'HireAI' : 'Candidate'}</div>
+                                                        <p className="text-sm text-slate-700 leading-relaxed font-medium">{msg.content}</p>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+
+                                <div className="p-5 bg-amber-50 rounded-2xl border border-amber-100 flex gap-4">
+                                    <AlertCircle className="text-amber-500 shrink-0 mt-1" />
+                                    <div className="text-sm text-amber-900 leading-snug">
+                                        <span className="font-extrabold block mb-1">Stay Within View</span>
+                                        Ensure you remain in the center of the frame and keep this tab active to avoid flags.
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                )}
+                    );
+                })()}
             </div>
 
             <AlertConfirmation

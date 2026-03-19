@@ -52,6 +52,7 @@ export default function ResumeUpload() {
     // Editor State (Step 2)
     const [newQuestion, setNewQuestion] = useState("");
     const [newQuestionType, setNewQuestionType] = useState("Technical");
+    const [newQuestionDifficulty, setNewQuestionDifficulty] = useState("Medium");
     const [newTestCases, setNewTestCases] = useState<TestCase[]>([{ input: "", output: "" }]);
 
     // AI Job Description Generator State
@@ -125,7 +126,11 @@ export default function ResumeUpload() {
             toast({ title: "Empty Question", description: "Please enter a question text.", variant: "destructive" });
             return;
         }
-        const questionPayload: Question = { question: newQuestion, type: newQuestionType };
+        const questionPayload: Question = { 
+            question: newQuestion, 
+            type: newQuestionType === 'Problem Solving' ? 'Coding' : newQuestionType,
+            difficulty: newQuestionDifficulty 
+        };
         if (newQuestionType === 'Problem Solving') {
             const validTestCases = newTestCases.filter(tc => tc.input.trim() || tc.output.trim());
             if (validTestCases.length > 0) {
@@ -134,6 +139,7 @@ export default function ResumeUpload() {
         }
         setGeneratedQuestions([...generatedQuestions, questionPayload]);
         setNewQuestion("");
+        setNewQuestionDifficulty("Medium");
         setNewTestCases([{ input: "", output: "" }]);
         toast({ title: "Question Added", description: "Successfully added to the list." });
     };
@@ -495,6 +501,15 @@ Format it in a clear, professional manner suitable for a job posting.`;
                                     <option value="Behavioral">Behavioral</option>
                                     <option value="Problem Solving">Problem Solving</option>
                                     <option value="Leadership">Leadership</option>
+                                </select>
+                                <select
+                                    value={newQuestionDifficulty}
+                                    onChange={(e) => setNewQuestionDifficulty(e.target.value)}
+                                    className="px-4 py-2.5 border border-border rounded-lg bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-sm min-w-30 text-foreground"
+                                >
+                                    <option value="Easy">Easy</option>
+                                    <option value="Medium">Medium</option>
+                                    <option value="Hard">Hard</option>
                                 </select>
                                 <Button onClick={handleAddQuestion} variant="default">
                                     <PlusIcon className="w-4 h-4 mr-2" /> Add

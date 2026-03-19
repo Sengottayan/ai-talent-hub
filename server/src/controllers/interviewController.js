@@ -368,11 +368,27 @@ const shareInterviewLinkController = async (req, res) => {
 
         const subject = `Interview Invitation: ${interview.jobRole}`;
 
-        // Defensive port fix
-        let currentLink = interview.interviewLink || '';
-        if (currentLink.includes(':8081')) {
-            currentLink = currentLink.replace(':8081', ':8080');
-        }
+        // 1. Generate a NEW unique ID for the shared candidate 
+        // to prevent session collision with the original candidate
+        const newInterviewId = uuidv4();
+        const baseUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
+        const newLink = `${baseUrl}/interview/${newInterviewId}`;
+
+        // Create a CLONE of the interview for the new candidate
+        const sharedInterview = await Interview.create({
+            interviewId: newInterviewId,
+            candidateEmail: email.toLowerCase().trim(),
+            candidateEmails: [email.toLowerCase().trim()],
+            jobRole: interview.jobRole,
+            role: interview.role || interview.jobRole,
+            jobDescription: interview.jobDescription,
+            duration: interview.duration,
+            interviewType: interview.interviewType,
+            questions: interview.questions,
+            interviewLink: newLink,
+            status: 'Created',
+            companyName: interview.companyName
+        });
 
         const body = `
             <h3>Interview Invitation</h3>
@@ -383,13 +399,13 @@ const shareInterviewLinkController = async (req, res) => {
                 <li>Type: ${interview.interviewType}</li>
             </ul>
             <p>Please click the link below to start your interview:</p>
-            <p><a href="${currentLink}">${currentLink}</a></p>
+            <p><a href="${newLink}">${newLink}</a></p>
             <br>
             <p>Good luck!</p>
         `;
 
         const result = await sendEmail(
-            email,
+            email.toLowerCase().trim(),
             subject,
             body,
             { duration: interview.duration, interviewType: interview.interviewType }
@@ -399,15 +415,10 @@ const shareInterviewLinkController = async (req, res) => {
             return res.status(500).json({ success: false, message: "Failed to send email" });
         }
 
-        // Optional: Add to candidateEmails if not already there
-        if (!interview.candidateEmails.includes(email.toLowerCase().trim())) {
-            interview.candidateEmails.push(email.toLowerCase().trim());
-            await interview.save();
-        }
-
-        res.status(200).json({
+        res.status(201).json({
             success: true,
-            message: `Email sent successfully to ${email}`
+            message: `New interview session created and link sent to ${email}`,
+            data: sharedInterview
         });
     } catch (error) {
         console.error("Share Link Error:", error);
