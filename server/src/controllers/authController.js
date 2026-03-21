@@ -13,7 +13,7 @@ const generateToken = (id) => {
 // @route   POST /api/auth/signup
 // @access  Public
 const registerUser = async (req, res) => {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, company } = req.body;
     console.log(`Signup attempt: ${email}, role: ${role}`);
 
     try {
@@ -37,6 +37,7 @@ const registerUser = async (req, res) => {
                 name,
                 email,
                 password,
+                company: company || ""
             });
         } else {
             return res.status(400).json({ message: 'Invalid role' });
@@ -105,7 +106,8 @@ const loginUser = async (req, res) => {
             redirect_url: redirect_url,
             token: generateToken(user._id),
             name: user.name,
-            email: user.email
+            email: user.email,
+            company: user.company || ""
         });
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -206,4 +208,37 @@ const updatePassword = async (req, res) => {
     }
 };
 
-module.exports = { registerUser, loginUser, getUsers, deleteUser, resetPassword, updatePassword };
+// @desc    Update profile
+// @route   PUT /api/auth/update-profile
+// @access  Private
+const updateProfile = async (req, res) => {
+    const { name, company } = req.body;
+    const userId = req.user._id;
+
+    try {
+        let user = await Recruiter.findById(userId) || await Candidate.findById(userId) || await User.findById(userId);
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        if (name) user.name = name;
+        if (company !== undefined) user.company = company;
+
+        await user.save();
+
+        res.json({
+            success: true,
+            message: 'Profile updated successfully',
+            user: {
+                name: user.name,
+                company: user.company || "",
+                email: user.email
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+module.exports = { registerUser, loginUser, getUsers, deleteUser, resetPassword, updatePassword, updateProfile };

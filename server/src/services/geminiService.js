@@ -10,18 +10,23 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 async function extractEmailsFromText(text) {
     if (!text) return [];
 
+    // Pre-processing: Remove newlines that might break emails (common in PDF extraction)
+    // We'll create a cleaned version for Gemini/Regex
+    const cleanedText = text.replace(/\r?\n/g, ' ').replace(/\s+/g, ' ');
+
     try {
-        // Use gemini-1.5-flash for speed and cost efficiency
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        // Use gemini-pro for better stability as gemini-1.5-flash is reporting 404 for some users
+        const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
         const prompt = `
         Identify and extract all email addresses from the text below. 
+        Look carefully for emails that might have had spaces or weird formatting due to PDF extraction.
         Return ONLY a raw JSON array of strings (e.g., ["email1@example.com"]). 
         If none are found, return [].
         Do not output markdown code blocks.
 
         Text:
-        ${text.substring(0, 30000)}
+        ${cleanedText.substring(0, 30000)}
         `;
 
         const result = await model.generateContent(prompt);
@@ -35,22 +40,18 @@ async function extractEmailsFromText(text) {
 
         try {
             const emails = JSON.parse(output);
-            return Array.isArray(emails) ? emails : [];
+            return Array.isArray(emails) ? emails.map(e => e.toLowerCase().trim()) : [];
         } catch (jsonError) {
             console.error("Failed to parse JSON from Gemini:", output);
-            // Fallback to Regex extraction on the *original text* if Gemini returns garbage,
-            // or maybe just on the output? 
-            // If JSON fails, it's safer to try regex on the output or just return []
-            // Let's try to regex the output just in case it returned emails in plain text
-            const emailRegex = /[\w.-]+@[\w.-]+\.\w+/g;
+            const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
             return output.match(emailRegex) || [];
         }
 
     } catch (error) {
         console.error("Gemini extractEmailsFromText Error:", error.message);
-        // Robust Fallback: Regex extraction on original text
-        const emailRegex = /[\w.-]+@[\w.-]+\.\w+/g;
-        return text.match(emailRegex) || [];
+        // Robust Fallback: Regex extraction on CLEANED text
+        const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+        return cleanedText.match(emailRegex) || [];
     }
 }
 

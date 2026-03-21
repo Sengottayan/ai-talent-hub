@@ -109,6 +109,39 @@ const finalizeInterview = async (req, res) => {
         );
         console.log(`✅ Main interview status updated: ${interviewUpdate?.status || 'Failed'}`);
 
+        // --- NEW: Cooldown Logic ---
+        if (resultData.isCompleted) {
+            try {
+                const CandidateInterviewHistory = require('../models/CandidateInterviewHistory');
+                
+                // Cooldown: 90 days from completion
+                const cooldownPeriodDays = 90;
+                const cooldownUntil = new Date();
+                cooldownUntil.setDate(cooldownUntil.getDate() + cooldownPeriodDays);
+
+                await CandidateInterviewHistory.findOneAndUpdate(
+                    { 
+                        candidateEmail: email.toLowerCase().trim(),
+                        jobRole: interviewUpdate?.jobRole || 'Unknown',
+                        companyName: interviewUpdate?.companyName || 'AI Talent Hub'
+                    },
+                    {
+                        candidateEmail: email.toLowerCase().trim(),
+                        candidateId: existingResult?.candidate_id,
+                        jobRole: interviewUpdate?.jobRole || 'Unknown',
+                        companyName: interviewUpdate?.companyName || 'AI Talent Hub',
+                        interviewId: interview_id,
+                        interviewCompletedAt: new Date(),
+                        cooldownUntil: cooldownUntil
+                    },
+                    { upsert: true, new: true }
+                );
+                console.log(`⏱️ Cooldown recorded for ${email} until ${cooldownUntil.toDateString()}`);
+            } catch (cooldownErr) {
+                console.error('❌ Failed to record cooldown:', cooldownErr.message);
+            }
+        }
+
         console.log(`✅ Interview ${interview_id} finalized successfully`);
 
         // NEW: Trigger n8n evaluation if webhook is configured

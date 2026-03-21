@@ -16,14 +16,18 @@ const sidebarItems = [
 
 export function DashboardLayout() {
     const location = useLocation();
+    const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
+    const displayTitle = userInfo.company?.trim() || "Talent Hub";
+    const initial = displayTitle.charAt(0).toUpperCase();
+
     const [open, setOpen] = useState(false);
 
     const SidebarContent = () => (
         <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground">
             <div className="p-6">
                 <Link to="/" className="text-xl font-bold flex items-center gap-2 text-sidebar-foreground hover:scale-105 transition-transform">
-                    <span className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-primary-foreground">AI</span>
-                    Talent Hub
+                    <span className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-primary-foreground">{initial}</span>
+                    {displayTitle}
                 </Link>
             </div>
 

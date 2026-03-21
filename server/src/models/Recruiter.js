@@ -18,6 +18,10 @@ const recruiterSchema = mongoose.Schema({
     role: {
         type: String,
         default: "recruiter",
+    },
+    company: {
+        type: String,
+        default: "",
     }
 }, {
     timestamps: true,

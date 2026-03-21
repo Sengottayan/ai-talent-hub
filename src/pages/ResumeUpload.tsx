@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Upload, X, Loader2, Link as LinkIcon, Trash2, Plus, Mail, MessageSquareQuoteIcon, SparklesIcon, CheckCircle2, Copy, ExternalLink, Calendar, Clock, List, Share2, Phone, Linkedin, ArrowLeft, PlusIcon, Send } from "lucide-react";
+import { Upload, X, Loader2, Link as LinkIcon, Trash2, Plus, Mail, MessageSquareQuoteIcon, SparklesIcon, CheckCircle2, Copy, ExternalLink, Calendar, Clock, List, Share2, Phone, Linkedin, ArrowLeft, PlusIcon, Send, Pencil, Users, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,6 +32,7 @@ export default function ResumeUpload() {
     const [duration, setDuration] = useState("30");
     const [interviewType, setInterviewType] = useState("Technical");
     const [questionCount, setQuestionCount] = useState("10");
+    const [cooldownPeriod, setCooldownPeriod] = useState("90");
 
     // Candidate Source State
     const [files, setFiles] = useState<File[]>([]);
@@ -42,11 +43,13 @@ export default function ResumeUpload() {
     // Output State
     const [generatedQuestions, setGeneratedQuestions] = useState<Question[]>([]);
     const [extractedEmails, setExtractedEmails] = useState<string[]>([]);
+    const [cooldownInfo, setCooldownInfo] = useState<any[]>([]);
     const [interviewData, setInterviewData] = useState<any>(null); // For success step
 
     // UI State
     const [isProcessing, setIsProcessing] = useState(false);
     const [step, setStep] = useState(1);
+    const [editingEmail, setEditingEmail] = useState<{ index: number, value: string } | null>(null);
     const { toast } = useToast();
 
     // Editor State (Step 2)
@@ -108,17 +111,64 @@ export default function ResumeUpload() {
 
             const response = await axios.post(`${API_URL}/interviews/draft`, formData, config);
 
-            setGeneratedQuestions(response.data.data.questions || []);
-            setExtractedEmails(response.data.data.candidateEmails || []);
-            setStep(2); // Move to Editor
+            const { questions, candidateEmails, cooldownInfo, isCooldownViolation } = response.data.data;
+
+            setGeneratedQuestions(questions || []);
+            setExtractedEmails(candidateEmails || []);
+            setCooldownInfo(cooldownInfo || []);
+            
+            if (isCooldownViolation && (!questions || questions.length === 0)) {
+                // Cooldown blocked generation
+                setStep(3); // Jump to review so they can remove candidates
+                toast({
+                    title: "Cooldown Detected",
+                    description: `Questions were NOT generated to save resources. Please remove duplicate candidates from the review list.`,
+                    variant: "destructive"
+                });
+                return;
+            }
+
+            if (cooldownInfo?.length > 0) {
+                toast({
+                    title: "Cooldown Warning",
+                    description: `Some candidates are in a cooldown period. Review them before proceeding.`,
+                    variant: "destructive"
+                });
+            }
+
+            // Only move to step 2 if we actually have questions to edit
+            if (questions && questions.length > 0) {
+                setStep(2); 
+            } else {
+                setStep(3);
+            }
 
         } catch (error: any) {
             console.error(error);
+            const status = error.response?.status;
+            const errorData = error.response?.data?.data;
+
+            if (status === 409 && error.response?.data?.isCooldownViolation) {
+                // Backend strictly blocked generation due to cooldown
+                setExtractedEmails(errorData.candidateEmails || []);
+                setCooldownInfo(errorData.cooldownInfo || []);
+                setGeneratedQuestions([]);
+                setStep(3); // Jump to review step so they can see the badges and remove candidates
+                
+                toast({ 
+                    title: "Cooldown Violation", 
+                    description: "Resources preserved. High-priority cooldown detected. Please remove candidates to proceed.", 
+                    variant: "destructive" 
+                });
+                return;
+            }
+
             toast({ title: "Error", description: error.response?.data?.message || "Failed to generate draft.", variant: "destructive" });
         } finally {
             setIsProcessing(false);
         }
     };
+
 
     // Step 2: Advanced Question Editor
     const handleAddQuestion = () => {
@@ -163,7 +213,8 @@ export default function ResumeUpload() {
                 duration,
                 interviewType,
                 candidateEmails: extractedEmails,
-                questions: generatedQuestions
+                questions: generatedQuestions,
+                cooldownPeriod: parseInt(cooldownPeriod)
             }, config);
 
             const responseData = response.data.data;
@@ -311,6 +362,31 @@ Format it in a clear, professional manner suitable for a job posting.`;
         setInterviewData(null);
     };
 
+    const handleEditCandidate = (index: number) => {
+        setEditingEmail({ index, value: extractedEmails[index] });
+    };
+
+    const saveEditedEmail = () => {
+        if (!editingEmail) return;
+        
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(editingEmail.value)) {
+            toast({ title: "Invalid Email", description: "Please enter a valid email address.", variant: "destructive" });
+            return;
+        }
+
+        const updated = [...extractedEmails];
+        updated[editingEmail.index] = editingEmail.value.toLowerCase().trim();
+        setExtractedEmails(updated);
+        setEditingEmail(null);
+        toast({ title: "Email Updated", description: "Candidate email has been corrected." });
+    };
+
+    const removeCandidate = (index: number) => {
+        setExtractedEmails(extractedEmails.filter((_, i) => i !== index));
+        toast({ title: "Candidate Removed", description: "Email removed from the invitation list." });
+    };
+
     return (
         <div className="space-y-12 animate-fade-in max-w-7xl mx-auto pb-20 px-4 md:px-0">
             {step < 4 && (
@@ -349,6 +425,37 @@ Format it in a clear, professional manner suitable for a job posting.`;
                 </div>
             )}
 
+            {/* Edit Candidate Email Dialog */}
+            <Dialog open={editingEmail !== null} onOpenChange={(open) => !open && setEditingEmail(null)}>
+                <DialogContent className="sm:max-w-md bg-card border-border backdrop-blur-xl">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Mail className="w-5 h-5 text-primary" />
+                            Edit Candidate Email
+                        </DialogTitle>
+                        <DialogDescription>
+                            Correct any errors in the extracted email address.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="edit-email">Email Address</Label>
+                            <Input
+                                id="edit-email"
+                                value={editingEmail?.value || ""}
+                                onChange={(e) => setEditingEmail(prev => prev ? { ...prev, value: e.target.value } : null)}
+                                placeholder="name@example.com"
+                                className="bg-background border-border"
+                                onKeyDown={(e) => e.key === 'Enter' && saveEditedEmail()}
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setEditingEmail(null)}>Cancel</Button>
+                        <Button onClick={saveEditedEmail}>Save Changes</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* STEP 1: INPUT */}
             {step === 1 && (
@@ -421,6 +528,19 @@ Format it in a clear, professional manner suitable for a job posting.`;
                                                 <SelectItem value="10">10 Questions</SelectItem>
                                                 <SelectItem value="15">15 Questions</SelectItem>
                                                 <SelectItem value="20">20 Questions</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Cooldown Period</Label>
+                                        <Select value={cooldownPeriod} onValueChange={setCooldownPeriod}>
+                                            <SelectTrigger><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="0">No Cooldown</SelectItem>
+                                                <SelectItem value="30">30 Days</SelectItem>
+                                                <SelectItem value="60">60 Days</SelectItem>
+                                                <SelectItem value="90">90 Days (3 Months)</SelectItem>
+                                                <SelectItem value="180">180 Days (6 Months)</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>
@@ -620,18 +740,61 @@ Format it in a clear, professional manner suitable for a job posting.`;
                                 <div className="space-y-2">
                                     <Label className="flex items-center gap-2 font-semibold"><Mail className="h-4 w-4" /> Candidates found ({extractedEmails.length})</Label>
                                     <div className="p-4 bg-muted rounded-md text-sm max-h-60 overflow-y-auto border border-border">
-                                        {extractedEmails.length > 0 ? extractedEmails.map((e, i) => (
-                                            <div key={i} className="py-2 border-b last:border-0 border-border flex items-center gap-2 text-foreground">
-                                                <div className="h-2 w-2 rounded-full bg-success"></div>
-                                                {e}
-                                            </div>
-                                        )) : <div className="text-destructive flex items-center gap-2"><X className="h-4 w-4" /> No valid emails found. Please go back and add candidates.</div>}
+                                        {extractedEmails.length > 0 ? extractedEmails.map((e, i) => {
+                                            const violation = cooldownInfo.find(c => c.email.toLowerCase() === e.toLowerCase());
+                                            return (
+                                                <div key={i} className="py-3 border-b last:border-0 border-border flex items-center justify-between text-foreground">
+                                                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                        <div className={`h-2 w-2 rounded-full ${violation ? 'bg-destructive' : 'bg-success'} shrink-0`}></div>
+                                                        <span className="font-medium truncate">{e}</span>
+                                                    </div>
+                                                    
+                                                    <div className="flex items-center gap-2">
+                                                        {violation?.isViolation && (
+                                                            <div className="flex flex-col items-end gap-0.5 mr-2">
+                                                                <Badge variant="destructive" className="font-bold text-[9px] scale-90 py-0 h-4 uppercase tracking-tighter">COOLDOWN</Badge>
+                                                                <span className="text-[8px] text-destructive italic font-bold">Wait until: {new Date(violation.cooldownUntil).toLocaleDateString()}</span>
+                                                            </div>
+                                                        )}
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="icon" 
+                                                            className="h-8 w-8 hover:bg-primary/10 hover:text-primary transition-colors"
+                                                            onClick={() => handleEditCandidate(i)}
+                                                        >
+                                                            <Pencil className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="icon" 
+                                                            className="h-8 w-8 hover:bg-destructive/10 hover:text-destructive transition-colors"
+                                                            onClick={() => removeCandidate(i)}
+                                                        >
+                                                            <Trash2 className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        }) : <div className="text-destructive flex items-center gap-2"><X className="h-4 w-4" /> No valid emails found. Please go back and add candidates.</div>}
                                     </div>
+
+                                    {cooldownInfo.some(c => c.isViolation && extractedEmails.includes(c.email)) && (
+                                        <div className="mt-4 p-4 rounded-xl bg-destructive/10 border border-destructive/20 animate-pulse">
+                                            <p className="text-xs text-destructive font-bold flex items-center gap-2">
+                                                <AlertCircle className="w-4 h-4" />
+                                                Action Required: Please remove candidates with a COOLDOWN badge to enable the send button.
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
                             </CardContent>
                             <CardFooter className="flex justify-between bg-muted/10 p-6">
                                 <Button variant="outline" onClick={() => setStep(2)}>Back</Button>
-                                <Button className="w-1/2 text-lg h-12 shadow-lg hover:shadow-xl transition-all" onClick={handleFinalize} disabled={isProcessing || extractedEmails.length === 0}>
+                                <Button 
+                                    className="w-1/2 text-lg h-12 shadow-lg hover:shadow-xl transition-all" 
+                                    onClick={handleFinalize} 
+                                    disabled={isProcessing || extractedEmails.length === 0 || cooldownInfo.some(c => c.isViolation && extractedEmails.includes(c.email))}
+                                >
                                     {isProcessing ? <><Loader2 className="animate-spin mr-2" /> Sending Invites...</> : "Send Links & Start Process"}
                                 </Button>
                             </CardFooter>

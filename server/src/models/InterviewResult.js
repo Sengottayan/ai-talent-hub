@@ -112,6 +112,10 @@ const interviewResultSchema = mongoose.Schema({
     n8n_evaluation: {
         type: mongoose.Schema.Types.Mixed,
         default: null
+    },
+    isCooldownViolation: {
+        type: Boolean,
+        default: false
     }
 }, {
     timestamps: true,

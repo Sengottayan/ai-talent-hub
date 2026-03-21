@@ -15,9 +15,11 @@ interface Interview {
   jobRole: string;
   duration: number;
   interviewType: string;
-  status: "Created" | "Active" | "Completed" | "Terminated";
+  status: "Created" | "Active" | "Completed" | "Terminated" | "in_progress" | "pending";
   email_sent: boolean;
   email_sent_at?: string;
+  isCooldownViolation?: boolean;
+  companyName?: string;
   createdAt: string;
 }
 
@@ -178,7 +180,14 @@ export default function Interviews() {
                     <div>
                       <div className="flex items-center gap-2">
                         <p className="font-semibold text-foreground">{interview.candidateName || interview.candidateEmails[0]}</p>
-
+                        {interview.isCooldownViolation && (
+                          <div className="flex items-center">
+                             <div className="px-2 py-0.5 rounded-full bg-destructive/10 text-destructive text-[10px] font-bold border border-destructive/20 flex items-center gap-1">
+                               <XCircle className="h-2.5 w-2.5" />
+                               COOLDOWN
+                             </div>
+                          </div>
+                        )}
                       </div>
                       <p className="text-sm text-muted-foreground">{interview.jobRole} • {interview.interviewType}</p>
                     </div>

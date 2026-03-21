@@ -258,6 +258,14 @@ const initializeInterview = async (req, res) => {
             });
         }
 
+        // NEW: Cooldown Restriction
+        if (interview.isCooldownViolation) {
+            return res.status(403).json({
+                error: 'Cooldown active',
+                message: `You have already attended an interview for this role at ${interview.companyName}. Please try again after the cooldown period.`
+            });
+        }
+
         // Update candidate email and name if provided
         if (email && !interview.candidateEmail) {
             interview.candidateEmail = email.toLowerCase().trim();

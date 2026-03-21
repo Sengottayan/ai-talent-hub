@@ -39,6 +39,51 @@ const draftInterviewController = async (req, res) => {
         }
 
         candidateEmails = [...new Set(candidateEmails)];
+        const companyName = req.user?.company || '';
+        const recruiterName = req.user?.name || '';
+
+        // --- 1.5 Strict Cooldown Violation Check (Aborts Generation) ---
+        const CandidateInterviewHistory = require('../models/CandidateInterviewHistory');
+        const cooldownInfo = [];
+
+        for (const email of candidateEmails) {
+            const cleanEmail = email.toLowerCase().trim();
+            // Match against both Company AND individual name to catch legacy records
+            const history = await CandidateInterviewHistory.findOne({
+                candidateEmail: cleanEmail,
+                jobRole: jobRole,
+                $or: [
+                    { companyName: companyName },
+                    { companyName: recruiterName }
+                ],
+                cooldownUntil: { $gt: new Date() }
+            });
+
+            if (history) {
+                cooldownInfo.push({
+                    email: cleanEmail,
+                    cooldownUntil: history.cooldownUntil,
+                    isViolation: true
+                });
+            }
+        }
+
+        const hasViolation = cooldownInfo.some(c => c.isViolation);
+        const forceGenerate = req.body.forceGenerate === 'true' || req.body.forceGenerate === true;
+
+        if (hasViolation && !forceGenerate) {
+            console.log("🛑 Cooldown Violation - Aborting Draft Generation to preserve resources.");
+            return res.status(409).json({
+                success: false,
+                message: "One or more candidates are in a cooldown period.",
+                isCooldownViolation: true,
+                data: {
+                    candidateEmails,
+                    questions: [],
+                    cooldownInfo
+                }
+            });
+        }
 
         // --- 2. Question Generation ---
         console.log("Generating draft questions...");
@@ -50,7 +95,9 @@ const draftInterviewController = async (req, res) => {
             message: "Draft generated successfully.",
             data: {
                 candidateEmails,
-                questions
+                questions,
+                cooldownInfo,
+                isCooldownViolation: hasViolation
             }
         });
 
@@ -88,6 +135,19 @@ const finalizeInterviewController = async (req, res) => {
             const baseUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
             const link = `${baseUrl}/interview/${interviewId}`;
 
+            // --- NEW: Cooldown Logic Check ---
+            const CandidateInterviewHistory = require('../models/CandidateInterviewHistory');
+            const companyName = req.user?.company || req.user?.name || 'AI Talent Hub';
+            
+            const history = await CandidateInterviewHistory.findOne({
+                candidateEmail: cleanEmail,
+                jobRole: jobRole,
+                companyName: companyName,
+                cooldownUntil: { $gt: new Date() }
+            });
+
+            const isViolation = !!history;
+
             // Create Interview Document
             const newInterview = await Interview.create({
                 interviewId,
@@ -100,7 +160,9 @@ const finalizeInterviewController = async (req, res) => {
                 interviewType,
                 questions,
                 interviewLink: link,
-                status: 'Created'
+                status: 'Created',
+                companyName,
+                isCooldownViolation: isViolation
             });
 
             createdInterviews.push(newInterview);
@@ -130,6 +192,22 @@ const finalizeInterviewController = async (req, res) => {
                 body,
                 { duration, interviewType }
             );
+
+            // Create History Entry (Start Cooldown)
+            const days = parseInt(req.body.cooldownPeriod || 90);
+            
+            if (days > 0) {
+                const cooldownUntil = new Date();
+                cooldownUntil.setDate(cooldownUntil.getDate() + days);
+
+                await CandidateInterviewHistory.create({
+                    candidateEmail: cleanEmail,
+                    jobRole,
+                    companyName,
+                    interviewId,
+                    cooldownUntil
+                });
+            }
 
             results.push({ email: cleanEmail, success: result.success });
 

@@ -98,6 +98,10 @@ const interviewSchema = new mongoose.Schema({
     otpExpires: {
         type: Date
     },
+    isCooldownViolation: {
+        type: Boolean,
+        default: false
+    },
     createdAt: {
         type: Date,
         default: Date.now

@@ -5,6 +5,67 @@ const axios = require('axios');
 const { sendEmail } = require('../services/emailService');               // EmailJS (used for other emails)
 const { sendMailNodemailer } = require('../utils/sendMailNodemailer');   // Nodemailer (used for rejection emails)
 
+// ─── Helper: Generate Next Available Business Slots ─────────────────────────────
+/**
+ * Automatically finds the next available interview slots by checking both
+ * the Interviews and RescheduleRequests collections for occupancy.
+ * Business Hours: Monday-Friday, 9:00 AM - 6:00 PM (IST).
+ */
+const generateAvailableSlots = async (startDate, limit = 5) => {
+  const slots = [];
+  let current = new Date(startDate);
+  
+  // Start searching from the day after the requested date
+  current.setDate(current.getDate() + 1);
+  current.setHours(9, 0, 0, 0);
+
+  let iterations = 0;
+  // Look through the next 14 days maximum
+  while (slots.length < limit && iterations < 14) {
+    const day = current.getDay();
+    
+    // Skip Saturday (6) and Sunday (0)
+    if (day !== 0 && day !== 6) {
+      // Check hourly slots from 9:00 AM to 5:00 PM (last slot starts at 5PM)
+      for (let h = 9; h <= 17; h++) {
+        const slot = new Date(current);
+        slot.setHours(h, 0, 0, 0);
+
+        // Safety: ensure we don't pick past dates
+        if (slot <= new Date()) continue;
+
+        // Check occupancy in DB
+        // 1. Check existing confirmed interviews (Active/Scheduled status)
+        const isInterviewed = await Interview.exists({
+          scheduledDate: slot,
+          status: { $in: ['Active', 'Scheduled'] }
+        });
+
+        // 2. Check other pending/confirmed reschedule requests
+        const isRequested = !isInterviewed && await RescheduleRequest.exists({
+          $or: [
+            { requestedDate: slot, status: { $in: ['Pending', 'Processing', 'Action Required'] } },
+            { confirmedDate: slot, status: 'Confirmed' }
+          ]
+        });
+
+        if (!isInterviewed && !isRequested) {
+          slots.push(slot.toISOString());
+        }
+
+        if (slots.length >= limit) break;
+      }
+    }
+    
+    // Next day
+    current.setDate(current.getDate() + 1);
+    current.setHours(9, 0, 0, 0);
+    iterations++;
+  }
+  
+  return slots;
+};
+
 // ─── Helper: Trigger n8n Reschedule Webhook ─────────────────────────────────
 /**
  * Fires the n8n reschedule webhook.
@@ -255,6 +316,58 @@ const createRescheduleRequest = async (req, res) => {
       });
     }
 
+    // ── 2.5 Candidate Collision Guard ──────────────────────────────────────
+    // NEW: Prevent the candidate from double-booking themselves.
+    // Check for other interviews or pending requests at the same time.
+    const collisionTime = parsedDate;
+
+    // 1. Check for other confirmed interviews at the same time
+    const interviewCollision = await Interview.findOne({
+      candidateId,
+      _id: { $ne: interviewId }, // Must be a different interview
+      scheduledDate: collisionTime,
+      status: { $in: ['Active', 'Scheduled', 'Rescheduled'] }
+    });
+
+    if (interviewCollision) {
+      const timeStr = collisionTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+      const dateStr = collisionTime.toLocaleDateString('en-IN');
+      return res.status(409).json({
+        message: `Collision: You already have another interview (${interviewCollision.jobRole || 'Position'}) scheduled for ${dateStr} at ${timeStr}. Please choose a different slot.`,
+      });
+    }
+
+    // 2. Check for other pending reschedule requests at the same time
+    const requestCollision = await RescheduleRequest.findOne({
+      candidateId,
+      interviewId: { $ne: interviewId }, // Different interview
+      requestedDate: collisionTime,
+      status: { $in: ACTIVE_STATUSES }
+    });
+
+    if (requestCollision) {
+      const timeStr = collisionTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+      const dateStr = collisionTime.toLocaleDateString('en-IN');
+      return res.status(409).json({
+        message: `Collision: You have already submitted a reschedule request for another interview at ${dateStr} ${timeStr}. Please pick a different slot.`,
+      });
+    }
+
+    // ── 2.7 Global Slot Occupancy Guard ──────────────────────────────────────
+    // Check if ANY other candidate has a confirmed interview at this exact time.
+    // This prevents multiple candidates from requesting the same slot if it's already "taken".
+    const globalCollision = await Interview.findOne({
+      scheduledDate: collisionTime,
+      status: { $in: ['Active', 'Scheduled'] },
+      _id: { $ne: interviewId }
+    });
+
+    if (globalCollision) {
+      return res.status(409).json({
+        message: `Slot Unavailable: This time slot is already booked by another candidate. Please choose a different time.`,
+      });
+    }
+
     // ── 3. Create the request ───────────────────────────────────────────────
     // Always start as Pending — HR must approve before n8n is triggered
     const request = await RescheduleRequest.create({
@@ -473,11 +586,21 @@ const pendingReschedule = async (req, res) => {
     request.status = 'Action Required'; // Candidate needs to pick from alternatives
     request.n8nStatus = 'pending';
 
-    let dates = availableDates;
-    if (typeof availableDates === 'string') {
-      try { dates = JSON.parse(availableDates); } catch (e) { /* ignore */ }
+    // ── Dynamic Slot Generation ───────────────────────────────────────────
+    // Instead of relying on potentially static/hardcoded dates from n8n,
+    // we dynamically generate the next 5 available slots from our database.
+    const dynamicSlots = await generateAvailableSlots(request.requestedDate, 5);
+    
+    // Use dynamic slots as primary, fallback to n8n provided dates if any
+    let finalDates = dynamicSlots;
+    if (!finalDates || finalDates.length === 0) {
+      finalDates = availableDates;
+      if (typeof availableDates === 'string') {
+        try { finalDates = JSON.parse(availableDates); } catch (e) { /* ignore */ }
+      }
     }
-    request.availableDates = dates || [];
+    
+    request.availableDates = Array.isArray(finalDates) ? finalDates : [];
     await request.save();
 
     // ── Notify candidate that their requested date was NOT available ──────
