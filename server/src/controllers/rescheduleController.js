@@ -146,7 +146,7 @@ const sendRejectionEmail = async (candidateEmail, candidateName, jobRole, reques
   const year = new Date().getFullYear();
   const dashboardUrl = process.env.FRONTEND_URL
     ? `${process.env.FRONTEND_URL}/candidate/dashboard`
-    : 'http://localhost:6060/candidate/dashboard';
+    : 'https://ai-talent-hub.vercel.app/candidate/dashboard';
 
   // ── Same design as the EmailJS template ─────────────────────────────────
   const html = `
@@ -611,7 +611,9 @@ const pendingReschedule = async (req, res) => {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
     });
     const year = new Date().getFullYear();
-    const dashboardUrl = process.env.FRONTEND_URL || 'http://localhost:6060/candidate/dashboard';
+    const dashboardUrl = process.env.FRONTEND_URL
+      ? `${process.env.FRONTEND_URL}/candidate/dashboard`
+      : 'https://ai-talent-hub.vercel.app/candidate/dashboard';
 
     if (candidate?.email) {
       // Build the list of alternative dates

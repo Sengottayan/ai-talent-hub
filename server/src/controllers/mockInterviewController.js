@@ -16,7 +16,7 @@ const createMockInterviewController = async (req, res) => {
 
         // Generate unique interview ID
         const interviewId = `mock-${uuidv4()}`;
-        const interviewLink = `${process.env.FRONTEND_URL || 'http://localhost:8080'}/interview/${interviewId}/start`;
+        const interviewLink = `${process.env.FRONTEND_URL || 'https://ai-talent-hub.vercel.app'}/interview/${interviewId}/start`;
 
         // Create mock interview
         const mockInterview = await Interview.create({

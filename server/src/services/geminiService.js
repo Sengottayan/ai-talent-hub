@@ -475,10 +475,90 @@ async function generateInterviewFeedback(conversation) {
     }
 }
 
+/**
+ * Generate a job description based on a prompt.
+ */
+async function generateAIDescription(prompt) {
+    if (!prompt) return "Professional job description could not be generated at this time.";
+
+    try {
+        console.log("📡 Generating job description via Gemini...");
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        const result = await withTimeout(
+            model.generateContent(prompt),
+            20000,
+            "Gemini (Description)"
+        );
+
+        if (result) {
+            const response = await result.response;
+            let output = response.text().trim();
+            if (output.startsWith('```')) output = output.replace(/```markdown/g, '').replace(/```/g, '').trim();
+            if (output) {
+                console.log("✅ Description generated via Gemini.");
+                return output;
+            }
+        }
+    } catch (error) {
+        console.warn(`⚠️ [Gemini AI Failover] generateAIDescription: Timeout/Error (${error.message}). Trying Groq...`);
+        
+        // Try Groq Fallback
+        const groqOutput = await generateWithGroq(prompt, false);
+        if (groqOutput) {
+            console.log("✅ Description generated via Groq fallback.");
+            return groqOutput.trim();
+        }
+    }
+
+    return "Our AI is currently busy. Please try writing a short description manually or try again in a moment.";
+}
+
+/**
+ * Suggest skills for a job role.
+ */
+async function suggestAISkills(role) {
+    if (!role) return "React, Node.js, Problem Solving";
+    
+    const prompt = `Based on the job role "${role}", suggest exactly 10 essential technical and soft skills. Return ONLY a comma-separated list of strings. Example: React, Node.js, Problem Solving`;
+
+    try {
+        console.log(`📡 Suggesting skills for "${role}" via Gemini...`);
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        const result = await withTimeout(
+            model.generateContent(prompt),
+            10000,
+            "Gemini (Skills)"
+        );
+
+        if (result) {
+            const response = await result.response;
+            let output = response.text().trim();
+            if (output.startsWith('```')) output = output.replace(/```/g, '').trim();
+            if (output) {
+                console.log("✅ Skills suggested via Gemini.");
+                return output;
+            }
+        }
+    } catch (error) {
+        console.warn(`⚠️ [Gemini AI Failover] suggestAISkills: Timeout/Error (${error.message}). Trying Groq...`);
+        
+        // Try Groq Fallback
+        const groqOutput = await generateWithGroq(prompt, false);
+        if (groqOutput) {
+            console.log("✅ Skills suggested via Groq fallback.");
+            return groqOutput.trim();
+        }
+    }
+
+    return "Communication, Teamwork, Technical Proficiency, Problem Solving, Adaptability";
+}
+
 module.exports = {
     extractEmailsFromText,
     generateInterviewQuestions,
     generateInterviewFeedback,
     generateCvQuestions,
-    generateHybridQuestions
+    generateHybridQuestions,
+    generateAIDescription,
+    suggestAISkills
 };

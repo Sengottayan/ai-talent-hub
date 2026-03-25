@@ -26,7 +26,7 @@ const getDashboardStats = async (req, res) => {
         // Filter Interviews
         const interviewQuery = {
             ...baseQuery,
-            status: 'Active',
+            status: { $in: ['Created', 'Scheduled', 'Active', 'Rescheduled'] },
             interviewType: { $ne: 'Mock' }
         };
 
@@ -95,22 +95,25 @@ const getDashboardStats = async (req, res) => {
             .limit(5);
 
         const mappedUpcoming = upcomingInterviewsRaw.map(i => ({
-            candidate: i.jobRole || "General",
-            role: i.jobDescription?.substring(0, 30) || "Interview",
+            candidate: i.candidateEmail?.split('@')[0] || "Candidate",
+            email: i.candidateEmail,
+            role: i.jobRole || "Interview",
             time: new Date(i.createdAt).toLocaleDateString(),
-            type: i.interviewType || "Technical"
+            type: i.interviewType || "Technical",
+            status: i.status
         }));
 
-        // Fetch Recent Candidates (Assuming candidate model tracks signup time)
-        const recentCandidatesRaw = await Candidate.find({ role: 'candidate' })
+        // Fetch Recent Candidates from Interviews (Actual people being interviewed by this company)
+        const recentInterviews = await Interview.find(baseQuery)
             .sort({ createdAt: -1 })
             .limit(5);
-
-        const mappedRecent = recentCandidatesRaw.map(c => ({
-            name: c.name,
-            role: "Software Developer", // Placeholder role since Candidate model lacks 'role'
-            status: "shortlisted",      // Placeholder status since Candidate model lacks 'status'
-            score: 85
+            
+        const mappedRecent = recentInterviews.map(i => ({
+            name: i.candidateEmail?.split('@')[0] || "Candidate",
+            email: i.candidateEmail,
+            role: i.jobRole || "Candidate",
+            status: i.status === 'Created' ? 'invited' : (i.status === 'Active' ? 'in-progress' : i.status.toLowerCase()),
+            score: 0 
         }));
 
         // Fetch Actual Score Distribution

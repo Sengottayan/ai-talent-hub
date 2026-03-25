@@ -201,7 +201,7 @@ const upsertResult = async (req, res) => {
 
       const candidateName = candidate_name || fullname || "Candidate";
       const year = new Date().getFullYear();
-      const dashboardUrl = process.env.FRONTEND_URL || 'http://localhost:6060';
+      const dashboardUrl = process.env.FRONTEND_URL || 'https://ai-talent-hub.vercel.app';
 
       // ─── SELECTED ───
       if (decision.toLowerCase() === 'selected') {

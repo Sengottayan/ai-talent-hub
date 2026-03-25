@@ -43,7 +43,7 @@ const draftInterviewController = async (req, res) => {
         }
 
         candidateEmails = [...new Set(candidateEmails)];
-        const companyName = req.user?.company || '';
+        const companyName = req.user?.company || req.user?.name || 'AI Talent Hub';
         const recruiterName = req.user?.name || '';
 
         // --- 1.5 Strict Cooldown Violation Check (Aborts Generation) ---
@@ -162,7 +162,7 @@ const finalizeInterviewController = async (req, res) => {
         for (const email of candidateEmails) {
             const cleanEmail = email.toLowerCase().trim();
             const interviewId = uuidv4();
-            const baseUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
+            const baseUrl = process.env.FRONTEND_URL || 'https://ai-talent-hub.vercel.app'; // Better production fallback
             const link = `${baseUrl}/interview/${interviewId}`;
 
             // --- PER-CANDIDATE QUESTIONS (CV_ONLY/HYBRID) ---
