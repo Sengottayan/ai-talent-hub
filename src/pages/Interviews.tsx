@@ -1,11 +1,19 @@
 import { useState, useEffect } from "react";
-import { Clock, User, Mail, Calendar, Loader2, CheckCircle2, XCircle } from "lucide-react";
+import {
+  Clock,
+  User,
+  Mail,
+  Calendar,
+  Loader2,
+  CheckCircle2,
+  XCircle,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import axios from "axios";
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 interface Interview {
   _id: string;
@@ -15,7 +23,13 @@ interface Interview {
   jobRole: string;
   duration: number;
   interviewType: string;
-  status: "Created" | "Active" | "Completed" | "Terminated" | "in_progress" | "pending";
+  status:
+    | "Created"
+    | "Active"
+    | "Completed"
+    | "Terminated"
+    | "in_progress"
+    | "pending";
   email_sent: boolean;
   email_sent_at?: string;
   isCooldownViolation?: boolean;
@@ -69,7 +83,11 @@ export default function Interviews() {
         },
       };
 
-      const { data } = await axios.post(`${API_URL}/interviews/resend/${interviewId}`, {}, config);
+      const { data } = await axios.post(
+        `${API_URL}/interviews/resend/${interviewId}`,
+        {},
+        config,
+      );
       toast({
         title: "Success",
         description: data.message || "Interview link shared via email.",
@@ -87,19 +105,25 @@ export default function Interviews() {
     }
   };
 
-  const scheduledInterviews = interviews.filter((i) => i.status === "Active" || i.status === "Created");
-  const pastInterviews = interviews.filter((i) => i.status === "Completed" || i.status === "Terminated");
+  const scheduledInterviews = interviews.filter(
+    (i) => i.status === "Active" || i.status === "Created",
+  );
+  const pastInterviews = interviews.filter(
+    (i) => i.status === "Completed" || i.status === "Terminated",
+  );
 
-  const totalPendingPages = Math.ceil(scheduledInterviews.length / itemsPerPage);
+  const totalPendingPages = Math.ceil(
+    scheduledInterviews.length / itemsPerPage,
+  );
   const paginatedScheduledInterviews = scheduledInterviews.slice(
     (pendingPage - 1) * itemsPerPage,
-    pendingPage * itemsPerPage
+    pendingPage * itemsPerPage,
   );
 
   const totalPastPages = Math.ceil(pastInterviews.length / itemsPerPage);
   const paginatedPastInterviews = pastInterviews.slice(
     (pastPage - 1) * itemsPerPage,
-    pastPage * itemsPerPage
+    pastPage * itemsPerPage,
   );
 
   if (isLoading) {
@@ -114,7 +138,9 @@ export default function Interviews() {
     <div className="space-y-8 animate-fade-in">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Interview Management</h1>
+        <h1 className="text-3xl font-bold text-foreground">
+          Interview Management
+        </h1>
         <p className="mt-1 text-muted-foreground">
           Generate links and share them with candidates via email
         </p>
@@ -128,7 +154,9 @@ export default function Interviews() {
               <Calendar className="h-6 w-6 text-primary" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-foreground">{scheduledInterviews.length}</p>
+              <p className="text-2xl font-bold text-foreground">
+                {scheduledInterviews.length}
+              </p>
               <p className="text-sm text-muted-foreground">Active / Pending</p>
             </div>
           </CardContent>
@@ -139,7 +167,9 @@ export default function Interviews() {
               <CheckCircle2 className="h-6 w-6 text-success" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-foreground">{interviews.filter(i => i.status === 'Completed').length}</p>
+              <p className="text-2xl font-bold text-foreground">
+                {interviews.filter((i) => i.status === "Completed").length}
+              </p>
               <p className="text-sm text-muted-foreground">Completed</p>
             </div>
           </CardContent>
@@ -150,7 +180,9 @@ export default function Interviews() {
               <XCircle className="h-6 w-6 text-destructive" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-foreground">{interviews.filter(i => i.status === 'Terminated').length}</p>
+              <p className="text-2xl font-bold text-foreground">
+                {interviews.filter((i) => i.status === "Terminated").length}
+              </p>
               <p className="text-sm text-muted-foreground">Terminated</p>
             </div>
           </CardContent>
@@ -175,21 +207,27 @@ export default function Interviews() {
                 >
                   <div className="flex items-center gap-4">
                     <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
-                      {interview.candidateName?.substring(0, 2).toUpperCase() || "CN"}
+                      {interview.candidateName?.substring(0, 2).toUpperCase() ||
+                        "CN"}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <p className="font-semibold text-foreground">{interview.candidateName || interview.candidateEmails[0]}</p>
+                        <p className="font-semibold text-foreground">
+                          {interview.candidateName ||
+                            interview.candidateEmails[0]}
+                        </p>
                         {interview.isCooldownViolation && (
                           <div className="flex items-center">
-                             <div className="px-2 py-0.5 rounded-full bg-destructive/10 text-destructive text-[10px] font-bold border border-destructive/20 flex items-center gap-1">
-                               <XCircle className="h-2.5 w-2.5" />
-                               COOLDOWN
-                             </div>
+                            <div className="px-2 py-0.5 rounded-full bg-destructive/10 text-destructive text-[10px] font-bold border border-destructive/20 flex items-center gap-1">
+                              <XCircle className="h-2.5 w-2.5" />
+                              COOLDOWN
+                            </div>
                           </div>
                         )}
                       </div>
-                      <p className="text-sm text-muted-foreground">{interview.jobRole} • {interview.interviewType}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {interview.jobRole} • {interview.interviewType}
+                      </p>
                     </div>
                   </div>
 
@@ -209,7 +247,8 @@ export default function Interviews() {
                         )}
                       </div>
                       <span className="text-muted-foreground">
-                        Created: {new Date(interview.createdAt).toLocaleDateString()}
+                        Created:{" "}
+                        {new Date(interview.createdAt).toLocaleDateString()}
                       </span>
                     </div>
 
@@ -224,14 +263,18 @@ export default function Interviews() {
                       ) : (
                         <Mail className="mr-2 h-4 w-4" />
                       )}
-                      {interview.email_sent ? "Resend Link" : "Share Link via Email"}
+                      {interview.email_sent
+                        ? "Resend Link"
+                        : "Share Link via Email"}
                     </Button>
                   </div>
                 </div>
               ))
             ) : (
               <div className="text-center py-10 border border-dashed rounded-lg">
-                <p className="text-muted-foreground text-sm">No pending interviews found.</p>
+                <p className="text-muted-foreground text-sm">
+                  No pending interviews found.
+                </p>
               </div>
             )}
 
@@ -240,7 +283,7 @@ export default function Interviews() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setPendingPage(p => Math.max(1, p - 1))}
+                  onClick={() => setPendingPage((p) => Math.max(1, p - 1))}
                   disabled={pendingPage === 1}
                 >
                   Previous
@@ -251,7 +294,9 @@ export default function Interviews() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setPendingPage(p => Math.min(totalPendingPages, p + 1))}
+                  onClick={() =>
+                    setPendingPage((p) => Math.min(totalPendingPages, p + 1))
+                  }
                   disabled={pendingPage === totalPendingPages}
                 >
                   Next
@@ -277,23 +322,33 @@ export default function Interviews() {
                 >
                   <div className="flex items-center gap-4">
                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-sm font-semibold text-muted-foreground">
-                      {interview.candidateName?.substring(0, 2).toUpperCase() || "CN"}
+                      {interview.candidateName?.substring(0, 2).toUpperCase() ||
+                        "CN"}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <p className="font-medium text-foreground">{interview.candidateName || interview.candidateEmails[0]}</p>
-
+                        <p className="font-medium text-foreground">
+                          {interview.candidateName ||
+                            interview.candidateEmails[0]}
+                        </p>
                       </div>
-                      <p className="text-xs text-muted-foreground">{interview.jobRole}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {interview.jobRole}
+                      </p>
                     </div>
                   </div>
                   <div className="text-right text-xs text-muted-foreground">
-                    <p>Completed: {new Date(interview.createdAt).toLocaleDateString()}</p>
+                    <p>
+                      Completed:{" "}
+                      {new Date(interview.createdAt).toLocaleDateString()}
+                    </p>
                   </div>
                 </div>
               ))
             ) : (
-              <p className="text-center py-6 text-sm text-muted-foreground">No past interviews found.</p>
+              <p className="text-center py-6 text-sm text-muted-foreground">
+                No past interviews found.
+              </p>
             )}
 
             {totalPastPages > 1 && (
@@ -301,7 +356,7 @@ export default function Interviews() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setPastPage(p => Math.max(1, p - 1))}
+                  onClick={() => setPastPage((p) => Math.max(1, p - 1))}
                   disabled={pastPage === 1}
                 >
                   Previous
@@ -312,7 +367,9 @@ export default function Interviews() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setPastPage(p => Math.min(totalPastPages, p + 1))}
+                  onClick={() =>
+                    setPastPage((p) => Math.min(totalPastPages, p + 1))
+                  }
                   disabled={pastPage === totalPastPages}
                 >
                   Next

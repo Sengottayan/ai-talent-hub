@@ -1,5 +1,14 @@
 import { useState, useEffect } from "react";
-import { Clock, Calendar, Check, X, MessageSquare, Loader2, RefreshCw, Mail } from "lucide-react";
+import {
+  Clock,
+  Calendar,
+  Check,
+  X,
+  MessageSquare,
+  Loader2,
+  RefreshCw,
+  Mail,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,8 +23,7 @@ import {
 import { cn } from "@/lib/utils";
 import axios from "axios";
 
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 interface RescheduleRequest {
   _id: string;
@@ -31,25 +39,51 @@ interface RescheduleRequest {
   };
   reason: string;
   requestedDate: string;
-  status: "Pending" | "Processing" | "Approved" | "Rejected" | "Confirmed" | "Action Required";
+  status:
+    | "Pending"
+    | "Processing"
+    | "Approved"
+    | "Rejected"
+    | "Confirmed"
+    | "Action Required";
   n8nStatus?: string;
   confirmedDate?: string;
   createdAt: string;
 }
 
 const statusConfig: Record<string, { label: string; className: string }> = {
-  Pending: { label: "Pending HR Review", className: "bg-warning/10 text-warning border-warning/20" },
-  Processing: { label: "Processing (n8n)", className: "bg-blue-500/10 text-blue-500 border-blue-500/20" },
-  Approved: { label: "Approved", className: "bg-success/10 text-success border-success/20" },
-  Confirmed: { label: "Confirmed", className: "bg-success/10 text-success border-success/20" },
-  Rejected: { label: "Rejected", className: "bg-destructive/10 text-destructive border-destructive/20" },
-  "Action Required": { label: "Action Required", className: "bg-orange-500/10 text-orange-500 border-orange-500/20" },
+  Pending: {
+    label: "Pending HR Review",
+    className: "bg-warning/10 text-warning border-warning/20",
+  },
+  Processing: {
+    label: "Processing (n8n)",
+    className: "bg-blue-500/10 text-blue-500 border-blue-500/20",
+  },
+  Approved: {
+    label: "Approved",
+    className: "bg-success/10 text-success border-success/20",
+  },
+  Confirmed: {
+    label: "Confirmed",
+    className: "bg-success/10 text-success border-success/20",
+  },
+  Rejected: {
+    label: "Rejected",
+    className: "bg-destructive/10 text-destructive border-destructive/20",
+  },
+  "Action Required": {
+    label: "Action Required",
+    className: "bg-orange-500/10 text-orange-500 border-orange-500/20",
+  },
 };
 
 export default function RescheduleRequests() {
   const [requests, setRequests] = useState<RescheduleRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState<Record<string, "approve" | "reject" | null>>({});
+  const [actionLoading, setActionLoading] = useState<
+    Record<string, "approve" | "reject" | null>
+  >({});
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
   const { toast } = useToast();
@@ -60,7 +94,11 @@ export default function RescheduleRequests() {
       setRequests(data);
     } catch (error) {
       console.error("Error fetching reschedule requests:", error);
-      toast({ title: "Error", description: "Failed to fetch reschedule requests.", variant: "destructive" });
+      toast({
+        title: "Error",
+        description: "Failed to fetch reschedule requests.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -75,7 +113,7 @@ export default function RescheduleRequests() {
     try {
       const { data } = await axios.post(`${API_URL}/reschedule/${id}/approve`);
       setRequests((prev) =>
-        prev.map((r) => (r._id === id ? { ...r, status: "Processing" } : r))
+        prev.map((r) => (r._id === id ? { ...r, status: "Processing" } : r)),
       );
       toast({
         title: "✅ Request Approved",
@@ -86,7 +124,8 @@ export default function RescheduleRequests() {
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error?.response?.data?.message || "Failed to approve the request.",
+        description:
+          error?.response?.data?.message || "Failed to approve the request.",
         variant: "destructive",
       });
     } finally {
@@ -99,7 +138,7 @@ export default function RescheduleRequests() {
     try {
       const { data } = await axios.post(`${API_URL}/reschedule/${id}/reject`);
       setRequests((prev) =>
-        prev.map((r) => (r._id === id ? { ...r, status: "Rejected" } : r))
+        prev.map((r) => (r._id === id ? { ...r, status: "Rejected" } : r)),
       );
       toast({
         title: "❌ Request Rejected",
@@ -111,7 +150,8 @@ export default function RescheduleRequests() {
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error?.response?.data?.message || "Failed to reject the request.",
+        description:
+          error?.response?.data?.message || "Failed to reject the request.",
         variant: "destructive",
       });
     } finally {
@@ -119,30 +159,35 @@ export default function RescheduleRequests() {
     }
   };
 
-  const pendingRequests = requests.filter((r) => r.status === "Pending" && r.candidateId && r.interviewId);
+  const pendingRequests = requests.filter(
+    (r) => r.status === "Pending" && r.candidateId && r.interviewId,
+  );
   const processedRequests = requests.filter((r) => r.status !== "Pending");
 
   // Group processed requests by interview ID
-  const groupedProcessed = processedRequests.reduce((acc, req) => {
-    // Skip items that are broken/missing data
-    if (!req.interviewId) return acc;
+  const groupedProcessed = processedRequests.reduce(
+    (acc, req) => {
+      // Skip items that are broken/missing data
+      if (!req.interviewId) return acc;
 
-    const iid = req.interviewId?._id || "unknown";
-    if (!acc[iid]) {
-      acc[iid] = {
-        details: req.interviewId,
-        items: [],
-      };
-    }
-    acc[iid].items.push(req);
-    return acc;
-  }, {} as Record<string, { details: any; items: RescheduleRequest[] }>);
+      const iid = req.interviewId?._id || "unknown";
+      if (!acc[iid]) {
+        acc[iid] = {
+          details: req.interviewId,
+          items: [],
+        };
+      }
+      acc[iid].items.push(req);
+      return acc;
+    },
+    {} as Record<string, { details: any; items: RescheduleRequest[] }>,
+  );
 
   const groupedEntries = Object.entries(groupedProcessed);
   const totalPages = Math.ceil(groupedEntries.length / itemsPerPage);
   const paginatedGroupedEntries = groupedEntries.slice(
     (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
+    currentPage * itemsPerPage,
   );
 
   if (isLoading) {
@@ -158,12 +203,20 @@ export default function RescheduleRequests() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Reschedule Requests</h1>
+          <h1 className="text-3xl font-bold text-foreground">
+            Reschedule Requests
+          </h1>
           <p className="mt-1 text-muted-foreground">
-            Review and approve or reject candidate reschedule requests. Approved requests automatically trigger the n8n calendar workflow.
+            Review and approve or reject candidate reschedule requests. Approved
+            requests automatically trigger the n8n calendar workflow.
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={fetchRequests} className="gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={fetchRequests}
+          className="gap-2"
+        >
           <RefreshCw className="h-4 w-4" />
           Refresh
         </Button>
@@ -177,7 +230,9 @@ export default function RescheduleRequests() {
               <Clock className="h-6 w-6 text-warning" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-foreground">{pendingRequests.length}</p>
+              <p className="text-2xl font-bold text-foreground">
+                {pendingRequests.length}
+              </p>
               <p className="text-sm text-muted-foreground">Pending Review</p>
             </div>
           </CardContent>
@@ -202,7 +257,11 @@ export default function RescheduleRequests() {
             </div>
             <div>
               <p className="text-2xl font-bold text-foreground">
-                {requests.filter((r) => ["Approved", "Confirmed"].includes(r.status)).length}
+                {
+                  requests.filter((r) =>
+                    ["Approved", "Confirmed"].includes(r.status),
+                  ).length
+                }
               </p>
               <p className="text-sm text-muted-foreground">Approved</p>
             </div>
@@ -226,7 +285,13 @@ export default function RescheduleRequests() {
       <Tabs defaultValue="pending" className="w-full">
         <TabsList className="grid w-full grid-cols-2 max-w-[400px]">
           <TabsTrigger value="pending" className="flex items-center gap-2">
-            Pending <Badge variant="secondary" className="h-5 w-5 p-0 flex items-center justify-center rounded-full text-[10px]">{pendingRequests.length}</Badge>
+            Pending{" "}
+            <Badge
+              variant="secondary"
+              className="h-5 w-5 p-0 flex items-center justify-center rounded-full text-[10px]"
+            >
+              {pendingRequests.length}
+            </Badge>
           </TabsTrigger>
           <TabsTrigger value="processed">Processed</TabsTrigger>
         </TabsList>
@@ -243,7 +308,9 @@ export default function RescheduleRequests() {
               {pendingRequests.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                   <Clock className="h-12 w-12 text-muted-foreground/30" />
-                  <p className="mt-4 text-muted-foreground text-sm">No pending reschedule requests</p>
+                  <p className="mt-4 text-muted-foreground text-sm">
+                    No pending reschedule requests
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -257,18 +324,22 @@ export default function RescheduleRequests() {
                           {/* Candidate Info */}
                           <div className="flex items-center gap-4">
                             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-warning/10 text-sm font-bold text-warning">
-                              {request.candidateId?.name?.substring(0, 2).toUpperCase() ?? "CN"}
+                              {request.candidateId?.name
+                                ?.substring(0, 2)
+                                .toUpperCase() ?? "CN"}
                             </div>
                             <div>
                               <p className="font-semibold text-foreground">
-                                {request.candidateId?.name ?? "Unknown Candidate"}
+                                {request.candidateId?.name ??
+                                  "Unknown Candidate"}
                               </p>
                               <p className="text-sm text-muted-foreground flex items-center gap-1.5">
                                 <Mail className="h-3 w-3" />
                                 {request.candidateId?.email ?? "—"}
                               </p>
                               <p className="text-xs text-muted-foreground">
-                                {request.interviewId?.jobRole ?? "No Role Specified"}
+                                {request.interviewId?.jobRole ??
+                                  "No Role Specified"}
                               </p>
                             </div>
                           </div>
@@ -278,7 +349,9 @@ export default function RescheduleRequests() {
                             <div className="flex items-start gap-2">
                               <MessageSquare className="mt-0.5 h-4 w-4 text-muted-foreground shrink-0" />
                               <div>
-                                <p className="text-sm font-medium text-foreground">Candidate's Reason</p>
+                                <p className="text-sm font-medium text-foreground">
+                                  Candidate's Reason
+                                </p>
                                 <p className="mt-1 text-sm text-muted-foreground leading-relaxed">
                                   {request.reason}
                                 </p>
@@ -294,10 +367,14 @@ export default function RescheduleRequests() {
                               </p>
                               <p className="mt-0.5 flex items-center gap-1.5 text-sm font-medium text-foreground">
                                 <Calendar className="h-4 w-4 text-destructive" />
-                                {request.interviewId?.scheduledDate || request.interviewId?.interviewDate
+                                {request.interviewId?.scheduledDate ||
+                                request.interviewId?.interviewDate
                                   ? new Date(
-                                    request.interviewId.scheduledDate ?? request.interviewId.interviewDate!
-                                  ).toLocaleDateString("en-IN", { dateStyle: "medium" })
+                                      request.interviewId.scheduledDate ??
+                                        request.interviewId.interviewDate!,
+                                    ).toLocaleDateString("en-IN", {
+                                      dateStyle: "medium",
+                                    })
                                   : "Not Set"}
                               </p>
                             </div>
@@ -307,7 +384,11 @@ export default function RescheduleRequests() {
                               </p>
                               <p className="mt-0.5 flex items-center gap-1.5 text-sm font-medium text-foreground">
                                 <Calendar className="h-4 w-4 text-success" />
-                                {new Date(request.requestedDate).toLocaleDateString("en-IN", { dateStyle: "medium" })}
+                                {new Date(
+                                  request.requestedDate,
+                                ).toLocaleDateString("en-IN", {
+                                  dateStyle: "medium",
+                                })}
                               </p>
                             </div>
                             <div>
@@ -315,7 +396,10 @@ export default function RescheduleRequests() {
                                 Submitted
                               </p>
                               <p className="mt-0.5 text-sm font-medium text-muted-foreground">
-                                {new Date(request.createdAt).toLocaleDateString("en-IN", { dateStyle: "medium" })}
+                                {new Date(request.createdAt).toLocaleDateString(
+                                  "en-IN",
+                                  { dateStyle: "medium" },
+                                )}
                               </p>
                             </div>
                           </div>
@@ -365,12 +449,18 @@ export default function RescheduleRequests() {
             <div className="space-y-4">
               <Accordion type="multiple" className="space-y-4">
                 {paginatedGroupedEntries.map(([iid, group]) => (
-                  <AccordionItem key={iid} value={iid} className="border rounded-xl bg-card overflow-hidden">
+                  <AccordionItem
+                    key={iid}
+                    value={iid}
+                    className="border rounded-xl bg-card overflow-hidden"
+                  >
                     <AccordionTrigger className="hover:no-underline px-6 py-4 bg-muted/10">
                       <div className="flex flex-1 items-center justify-between text-left pr-4">
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-bold">Interview:</span>
+                            <span className="text-sm font-bold">
+                              Interview:
+                            </span>
                             <span className="font-mono text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">
                               {iid.slice(-8).toUpperCase()}
                             </span>
@@ -380,14 +470,18 @@ export default function RescheduleRequests() {
                           </p>
                         </div>
                         <Badge variant="outline" className="bg-white ml-auto">
-                          {group.items.length} Request{group.items.length > 1 ? 's' : ''}
+                          {group.items.length} Request
+                          {group.items.length > 1 ? "s" : ""}
                         </Badge>
                       </div>
                     </AccordionTrigger>
                     <AccordionContent className="p-0">
                       <div className="divide-y divide-border">
                         {group.items.map((request) => {
-                          const sc = statusConfig[request.status] ?? { label: request.status, className: "bg-muted text-muted-foreground" };
+                          const sc = statusConfig[request.status] ?? {
+                            label: request.status,
+                            className: "bg-muted text-muted-foreground",
+                          };
                           return (
                             <div
                               key={request._id}
@@ -395,7 +489,9 @@ export default function RescheduleRequests() {
                             >
                               <div className="flex items-center gap-4">
                                 <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-500">
-                                  {request.candidateId?.name?.substring(0, 2).toUpperCase() ?? "CN"}
+                                  {request.candidateId?.name
+                                    ?.substring(0, 2)
+                                    .toUpperCase() ?? "CN"}
                                 </div>
                                 <div>
                                   <p className="font-semibold text-foreground text-sm">
@@ -404,18 +500,35 @@ export default function RescheduleRequests() {
                                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-0.5">
                                     <p className="text-[11px] text-muted-foreground flex items-center gap-1">
                                       <Calendar className="h-3 w-3" />
-                                      Requested: <span className="font-medium">{new Date(request.requestedDate).toLocaleDateString("en-IN", { dateStyle: "medium" })}</span>
+                                      Requested:{" "}
+                                      <span className="font-medium">
+                                        {new Date(
+                                          request.requestedDate,
+                                        ).toLocaleDateString("en-IN", {
+                                          dateStyle: "medium",
+                                        })}
+                                      </span>
                                     </p>
                                     {request.confirmedDate && (
                                       <p className="text-[11px] text-muted-foreground flex items-center gap-1">
                                         <Check className="h-3 w-3 text-success" />
-                                        Confirmed: <span className="font-medium text-success">{new Date(request.confirmedDate).toLocaleDateString("en-IN", { dateStyle: "medium" })}</span>
+                                        Confirmed:{" "}
+                                        <span className="font-medium text-success">
+                                          {new Date(
+                                            request.confirmedDate,
+                                          ).toLocaleDateString("en-IN", {
+                                            dateStyle: "medium",
+                                          })}
+                                        </span>
                                       </p>
                                     )}
                                   </div>
                                 </div>
                               </div>
-                              <Badge variant="outline" className={cn("text-[10px] py-0", sc.className)}>
+                              <Badge
+                                variant="outline"
+                                className={cn("text-[10px] py-0", sc.className)}
+                              >
                                 {sc.label}
                               </Badge>
                             </div>
@@ -432,7 +545,7 @@ export default function RescheduleRequests() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
                   >
                     Previous
@@ -443,7 +556,9 @@ export default function RescheduleRequests() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    onClick={() =>
+                      setCurrentPage((p) => Math.min(totalPages, p + 1))
+                    }
                     disabled={currentPage === totalPages}
                   >
                     Next
@@ -455,7 +570,9 @@ export default function RescheduleRequests() {
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12 text-center">
                 <RefreshCw className="h-12 w-12 text-muted-foreground/30" />
-                <p className="mt-4 text-muted-foreground text-sm">No processed requests found</p>
+                <p className="mt-4 text-muted-foreground text-sm">
+                  No processed requests found
+                </p>
               </CardContent>
             </Card>
           )}

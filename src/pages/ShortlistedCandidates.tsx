@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/table";
 import axios from "axios";
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 interface Candidate {
   _id: string;
@@ -36,19 +36,21 @@ export default function ShortlistedCandidates() {
       try {
         const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
         const { data } = await axios.get(`${API_URL}/auth/users`, {
-          headers: { Authorization: `Bearer ${userInfo.token}` }
+          headers: { Authorization: `Bearer ${userInfo.token}` },
         });
 
         // Filter for candidates and map fields
-        const filtered = data.filter((u: any) => u.role === "candidate" || !u.role).map((u: any) => ({
-          _id: u._id,
-          name: u.name,
-          email: u.email,
-          skills: u.skills || [],
-          score: u.score || 0,
-          interviewStatus: u.interviewStatus || "pending",
-          role: "Candidate"
-        }));
+        const filtered = data
+          .filter((u: any) => u.role === "candidate" || !u.role)
+          .map((u: any) => ({
+            _id: u._id,
+            name: u.name,
+            email: u.email,
+            skills: u.skills || [],
+            score: u.score || 0,
+            interviewStatus: u.interviewStatus || "pending",
+            role: "Candidate",
+          }));
 
         setCandidates(filtered);
       } catch (error) {
@@ -64,7 +66,10 @@ export default function ShortlistedCandidates() {
     (c) =>
       c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (c.skills && c.skills.some((s) => s.toLowerCase().includes(searchQuery.toLowerCase())))
+      (c.skills &&
+        c.skills.some((s) =>
+          s.toLowerCase().includes(searchQuery.toLowerCase()),
+        )),
   );
 
   const getStatusVariant = (status: string) => {
@@ -95,7 +100,9 @@ export default function ShortlistedCandidates() {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Shortlisted Candidates</h1>
+          <h1 className="text-3xl font-bold text-foreground">
+            Shortlisted Candidates
+          </h1>
           <p className="mt-1 text-muted-foreground">
             View and manage qualified candidates from the database
           </p>
@@ -147,7 +154,9 @@ export default function ShortlistedCandidates() {
                           {candidate.name.substring(0, 2).toUpperCase()}
                         </div>
                         <div>
-                          <p className="font-medium text-foreground">{candidate.name}</p>
+                          <p className="font-medium text-foreground">
+                            {candidate.name}
+                          </p>
                           <p className="flex items-center gap-1 text-sm text-muted-foreground">
                             <Mail className="h-3 w-3" />
                             {candidate.email}
@@ -156,7 +165,9 @@ export default function ShortlistedCandidates() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <span className="text-sm text-foreground">{candidate.role}</span>
+                      <span className="text-sm text-foreground">
+                        {candidate.role}
+                      </span>
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
@@ -170,22 +181,28 @@ export default function ShortlistedCandidates() {
                             </span>
                           ))
                         ) : (
-                          <span className="text-muted-foreground text-xs italic">N/A</span>
+                          <span className="text-muted-foreground text-xs italic">
+                            N/A
+                          </span>
                         )}
                       </div>
                     </TableCell>
                     <TableCell className="text-center">
-                      <span className={`text-lg font-bold ${candidate.score ? 'text-primary' : 'text-muted-foreground'}`}>
-                        {candidate.score ? `${candidate.score}%` : 'N/A'}
+                      <span
+                        className={`text-lg font-bold ${candidate.score ? "text-primary" : "text-muted-foreground"}`}
+                      >
+                        {candidate.score ? `${candidate.score}%` : "N/A"}
                       </span>
                     </TableCell>
-                    <TableCell>
-                    </TableCell>
+                    <TableCell></TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
+                  <TableCell
+                    colSpan={5}
+                    className="h-32 text-center text-muted-foreground"
+                  >
                     No candidates found in the database.
                   </TableCell>
                 </TableRow>

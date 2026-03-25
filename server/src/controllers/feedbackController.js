@@ -1,4 +1,5 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const OpenAI = require('openai');
 const InterviewResult = require('../models/InterviewResult');
 const InterviewSession = require('../models/InterviewSession');
 const Interview = require('../models/Interview');
@@ -9,6 +10,12 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
+
+// Initialize Groq SDK (Failover)
+const groq = process.env.GROQ_API_KEY ? new OpenAI({
+    apiKey: process.env.GROQ_API_KEY.trim(),
+    baseURL: "https://api.groq.com/openai/v1"
+}) : null;
 
 /**
  * @desc    Finalize interview and generate AI feedback
@@ -244,7 +251,7 @@ Note: If there are no candidate answers for a question, do NOT invent one.`;
         if (genAI) {
             try {
                 console.log(`📡 Requesting Gemini feedback for ${candidateName}...`);
-                const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+                const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
                 // Add a timeout to avoid hanging
                 const result = await model.generateContent(prompt).catch(e => {
@@ -269,8 +276,26 @@ Note: If there are no candidate answers for a question, do NOT invent one.`;
                     console.error('Gemini JSON Parse Error:', e, "Raw Text:", text);
                 }
             } catch (err) {
-                console.error('Gemini API Error Context:', err.message);
-                // Continue to fallback
+                console.warn('Gemini Feedback Attempt failed:', err.message);
+                
+                // 1.1 Groq Fallback within Gemini block
+                if (groq) {
+                    try {
+                        console.log("📡 Falling back to Groq SDK for feedback...");
+                        const completion = await groq.chat.completions.create({
+                            messages: [{ role: 'user', content: prompt }],
+                            model: 'llama-3.3-70b-versatile',
+                            response_format: { type: 'json_object' },
+                            temperature: 0.1
+                        });
+                        const groqText = completion.choices[0]?.message?.content;
+                        if (groqText) {
+                            return JSON.parse(groqText);
+                        }
+                    } catch (groqErr) {
+                        console.error("❌ Groq Feedback Fallback Error:", groqErr.message);
+                    }
+                }
             }
         }
 

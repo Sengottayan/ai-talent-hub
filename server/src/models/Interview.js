@@ -102,6 +102,11 @@ const interviewSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
+    questionMode: {
+        type: String,
+        enum: ['JD_ONLY', 'CV_ONLY', 'HYBRID'],
+        default: 'JD_ONLY'
+    },
     createdAt: {
         type: Date,
         default: Date.now

@@ -12,12 +12,18 @@ interface StatCardProps {
   className?: string;
 }
 
-export function StatCard({ title, value, icon: Icon, trend, className }: StatCardProps) {
+export function StatCard({
+  title,
+  value,
+  icon: Icon,
+  trend,
+  className,
+}: StatCardProps) {
   return (
     <div
       className={cn(
         "relative overflow-hidden rounded-lg border border-border bg-card p-6 shadow-card transition-all duration-200 hover:shadow-elevated animate-fade-in",
-        className
+        className,
       )}
     >
       <div className="flex items-start justify-between">
@@ -28,7 +34,7 @@ export function StatCard({ title, value, icon: Icon, trend, className }: StatCar
             <p
               className={cn(
                 "text-xs font-medium",
-                trend.isPositive ? "text-success" : "text-destructive"
+                trend.isPositive ? "text-success" : "text-destructive",
               )}
             >
               {trend.isPositive ? "+" : "-"}

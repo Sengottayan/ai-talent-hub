@@ -1,227 +1,311 @@
 import { useEffect, useState } from "react";
-import { FileText, Users, Calendar, CheckCircle, UserCheck } from "lucide-react";
+import {
+  FileText,
+  Users,
+  Calendar,
+  CheckCircle,
+  UserCheck,
+} from "lucide-react";
 import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+} from "recharts";
 import api from "@/lib/api";
 
 const iconMap: { [key: string]: any } = {
-    FileText,
-    Users,
-    Calendar,
-    CheckCircle,
-    UserCheck
+  FileText,
+  Users,
+  Calendar,
+  CheckCircle,
+  UserCheck,
 };
 
 interface Stat {
-    title: string;
-    value: number;
-    icon: string;
-    trend: { value: number; isPositive: boolean; };
+  title: string;
+  value: number;
+  icon: string;
+  trend: { value: number; isPositive: boolean };
 }
 
 interface Candidate {
-    name: string;
-    role: string;
-    status: string;
-    score: number;
+  name: string;
+  role: string;
+  status: string;
+  score: number;
 }
 
 interface Interview {
-    candidate: string;
-    role: string;
-    time: string;
-    type: string;
+  candidate: string;
+  role: string;
+  time: string;
+  type: string;
 }
 
 export default function Dashboard() {
-    const [stats, setStats] = useState<Stat[]>([]);
-    const [recentCandidates, setRecentCandidates] = useState<Candidate[]>([]);
-    const [upcomingInterviews, setUpcomingInterviews] = useState<Interview[]>([]);
-    const [analytics, setAnalytics] = useState<any>(null);
-    const [isLoading, setIsLoading] = useState(true);
+  const [stats, setStats] = useState<Stat[]>([]);
+  const [recentCandidates, setRecentCandidates] = useState<Candidate[]>([]);
+  const [upcomingInterviews, setUpcomingInterviews] = useState<Interview[]>([]);
+  const [analytics, setAnalytics] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-    const COLORS = ['#0ea5e9', '#10b981', '#6366f1', '#f43f5e', '#f59e0b'];
+  const COLORS = ["#0ea5e9", "#10b981", "#6366f1", "#f43f5e", "#f59e0b"];
 
-    useEffect(() => {
-        const fetchStats = async () => {
-            try {
-                const { data } = await api.get('/stats/dashboard');
-                setStats(data.stats);
-                setRecentCandidates(data.recentCandidates);
-                setUpcomingInterviews(data.upcomingInterviews);
-                setAnalytics(data.analytics);
-            } catch (error) {
-                console.error("Failed to fetch dashboard stats:", error);
-            } finally {
-                setIsLoading(false);
-            }
-        };
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const { data } = await api.get("/stats/dashboard");
+        setStats(data.stats);
+        setRecentCandidates(data.recentCandidates);
+        setUpcomingInterviews(data.upcomingInterviews);
+        setAnalytics(data.analytics);
+      } catch (error) {
+        console.error("Failed to fetch dashboard stats:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-        fetchStats();
-    }, []);
+    fetchStats();
+  }, []);
 
-    if (isLoading) {
-        return <div className="text-center p-8">Loading dashboard...</div>;
-    }
+  if (isLoading) {
+    return <div className="text-center p-8">Loading dashboard...</div>;
+  }
 
-    return (
-        <div className="space-y-8">
-            {/* Header */}
-            <div>
-                <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
-                <p className="mt-1 text-muted-foreground">
-                    Welcome back! Here's an overview of your hiring pipeline.
-                </p>
-            </div>
+  return (
+    <div className="space-y-8">
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
+        <p className="mt-1 text-muted-foreground">
+          Welcome back! Here's an overview of your hiring pipeline.
+        </p>
+      </div>
 
-            {/* Stats Grid */}
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-                {stats.map((stat, index) => {
-                    const IconComponent = iconMap[stat.icon] || FileText;
-                    return (
-                        <StatCard
-                            key={stat.title}
-                            title={stat.title}
-                            value={stat.value}
-                            icon={IconComponent}
-                            trend={stat.trend}
-                            className={`animation-delay-${index * 100}`}
-                        />
-                    );
-                })}
-            </div>
+      {/* Stats Grid */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        {stats.map((stat, index) => {
+          const IconComponent = iconMap[stat.icon] || FileText;
+          return (
+            <StatCard
+              key={stat.title}
+              title={stat.title}
+              value={stat.value}
+              icon={IconComponent}
+              trend={stat.trend}
+              className={`animation-delay-${index * 100}`}
+            />
+          );
+        })}
+      </div>
 
-            {/* Analytics Grid */}
-            {analytics && (
-                <div className="grid gap-6 lg:grid-cols-2">
-                    <Card className="animate-fade-in shadow-sm">
-                        <CardHeader>
-                            <CardTitle className="text-lg font-semibold">Candidate Pipeline Status</CardTitle>
-                            <CardDescription>Live breakdown of all candidate progression stages</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="h-[250px] w-full">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <PieChart>
-                                        <Pie
-                                            data={analytics.statusDistribution}
-                                            cx="50%"
-                                            cy="50%"
-                                            innerRadius={60}
-                                            outerRadius={80}
-                                            paddingAngle={5}
-                                            dataKey="value"
-                                            label={({ name, value }) => `${name}: ${value}`}
-                                        >
-                                            {analytics.statusDistribution.map((entry: any, index: number) => (
-                                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                            ))}
-                                        </Pie>
-                                        <Tooltip />
-                                    </PieChart>
-                                </ResponsiveContainer>
-                            </div>
-                        </CardContent>
-                    </Card>
+      {/* Analytics Grid */}
+      {analytics && (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card className="animate-fade-in shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-lg font-semibold">
+                Candidate Pipeline Status
+              </CardTitle>
+              <CardDescription>
+                Live breakdown of all candidate progression stages
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[250px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={analytics.statusDistribution}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={5}
+                      dataKey="value"
+                      label={({ name, value }) => `${name}: ${value}`}
+                    >
+                      {analytics.statusDistribution.map(
+                        (entry: any, index: number) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={COLORS[index % COLORS.length]}
+                          />
+                        ),
+                      )}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
 
-                    <Card className="animate-fade-in shadow-sm">
-                        <CardHeader>
-                            <CardTitle className="text-lg font-semibold">AI Assessment Scores</CardTitle>
-                            <CardDescription>Overall performance distribution across technical rounds</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="h-[250px] w-full">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={analytics.scoreDistribution} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                        <XAxis dataKey="name" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
-                                        <YAxis tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
-                                        <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '8px' }} />
-                                        <Bar dataKey="candidates" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
-            )}
-
-            {/* Content Grid */}
-            <div className="grid gap-6 lg:grid-cols-2">
-                {/* Recent Candidates */}
-                <Card className="animate-fade-in">
-                    <CardHeader>
-                        <CardTitle className="text-lg font-semibold">Recent Candidates</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="space-y-4">
-                            {recentCandidates.length === 0 ? (
-                                <p className="text-muted-foreground text-sm">No recent candidates found.</p>
-                            ) : (
-                                recentCandidates.map((candidate, i) => (
-                                    <div
-                                        key={i} // Using index as fallback key since names might duplicate in dev
-                                        className="flex flex-col sm:flex-row sm:items-center justify-between rounded-lg border border-border p-4 transition-colors hover:bg-muted/50 gap-3"
-                                    >
-                                        <div className="flex items-center gap-4">
-                                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-                                                {candidate.name.split(" ").map((n) => n[0]).join("")}
-                                            </div>
-                                            <div className="min-w-0">
-                                                <p className="font-medium text-foreground truncate">{candidate.name}</p>
-                                                <p className="text-sm text-muted-foreground truncate">{candidate.role}</p>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center justify-between sm:justify-end gap-3">
-                                            <span className="text-sm font-medium text-foreground">{candidate.score}%</span>
-                                            <StatusBadge variant={candidate.status as any}>
-                                                {candidate.status.charAt(0).toUpperCase() + candidate.status.slice(1)}
-                                            </StatusBadge>
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {/* Upcoming Interviews */}
-                <Card className="animate-fade-in">
-                    <CardHeader>
-                        <CardTitle className="text-lg font-semibold">Upcoming Interviews</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="space-y-4">
-                            {upcomingInterviews.length === 0 ? (
-                                <p className="text-muted-foreground text-sm">No upcoming interviews scheduled.</p>
-                            ) : (
-                                upcomingInterviews.map((interview, index) => (
-                                    <div
-                                        key={index}
-                                        className="flex flex-col sm:flex-row sm:items-center justify-between rounded-lg border border-border p-4 transition-colors hover:bg-muted/50 gap-3"
-                                    >
-                                        <div className="flex items-center gap-4">
-                                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent/10 text-sm font-semibold text-accent">
-                                                {interview.candidate.split(" ").map((n) => n[0]).join("")}
-                                            </div>
-                                            <div className="min-w-0">
-                                                <p className="font-medium text-foreground truncate">{interview.candidate}</p>
-                                                <p className="text-sm text-muted-foreground truncate">{interview.role}</p>
-                                            </div>
-                                        </div>
-                                        <div className="flex flex-row sm:flex-col justify-between sm:text-right gap-1 lowercase sm:normal-case">
-                                            <p className="text-sm font-medium text-foreground">{interview.time}</p>
-                                            <p className="text-sm text-muted-foreground">{interview.type}</p>
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
+          <Card className="animate-fade-in shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-lg font-semibold">
+                AI Assessment Scores
+              </CardTitle>
+              <CardDescription>
+                Overall performance distribution across technical rounds
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[250px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={analytics.scoreDistribution}
+                    margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fontSize: 12 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 12 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <Tooltip
+                      cursor={{ fill: "transparent" }}
+                      contentStyle={{ borderRadius: "8px" }}
+                    />
+                    <Bar
+                      dataKey="candidates"
+                      fill="#3b82f6"
+                      radius={[4, 4, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
         </div>
-    );
+      )}
+
+      {/* Content Grid */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Recent Candidates */}
+        <Card className="animate-fade-in">
+          <CardHeader>
+            <CardTitle className="text-lg font-semibold">
+              Recent Candidates
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {recentCandidates.length === 0 ? (
+                <p className="text-muted-foreground text-sm">
+                  No recent candidates found.
+                </p>
+              ) : (
+                recentCandidates.map((candidate, i) => (
+                  <div
+                    key={i} // Using index as fallback key since names might duplicate in dev
+                    className="flex flex-col sm:flex-row sm:items-center justify-between rounded-lg border border-border p-4 transition-colors hover:bg-muted/50 gap-3"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                        {candidate.name
+                          .split(" ")
+                          .map((n) => n[0])
+                          .join("")}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-medium text-foreground truncate">
+                          {candidate.name}
+                        </p>
+                        <p className="text-sm text-muted-foreground truncate">
+                          {candidate.role}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between sm:justify-end gap-3">
+                      <span className="text-sm font-medium text-foreground">
+                        {candidate.score}%
+                      </span>
+                      <StatusBadge variant={candidate.status as any}>
+                        {candidate.status.charAt(0).toUpperCase() +
+                          candidate.status.slice(1)}
+                      </StatusBadge>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Upcoming Interviews */}
+        <Card className="animate-fade-in">
+          <CardHeader>
+            <CardTitle className="text-lg font-semibold">
+              Upcoming Interviews
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {upcomingInterviews.length === 0 ? (
+                <p className="text-muted-foreground text-sm">
+                  No upcoming interviews scheduled.
+                </p>
+              ) : (
+                upcomingInterviews.map((interview, index) => (
+                  <div
+                    key={index}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between rounded-lg border border-border p-4 transition-colors hover:bg-muted/50 gap-3"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent/10 text-sm font-semibold text-accent">
+                        {interview.candidate
+                          .split(" ")
+                          .map((n) => n[0])
+                          .join("")}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-medium text-foreground truncate">
+                          {interview.candidate}
+                        </p>
+                        <p className="text-sm text-muted-foreground truncate">
+                          {interview.role}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-row sm:flex-col justify-between sm:text-right gap-1 lowercase sm:normal-case">
+                      <p className="text-sm font-medium text-foreground">
+                        {interview.time}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {interview.type}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
 }

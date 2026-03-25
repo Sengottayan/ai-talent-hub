@@ -1,7 +1,9 @@
 const { v4: uuidv4 } = require('uuid');
 const Interview = require('../models/Interview');
 const { processUploadedResumes } = require('../services/resumeService');
-const { generateInterviewQuestions, generateInterviewFeedback } = require('../services/geminiService');
+const { generateInterviewQuestions, generateInterviewFeedback, generateCvQuestions, generateHybridQuestions } = require('../services/geminiService');
+const CandidateInterviewQuestion = require('../models/CandidateInterviewQuestion');
+const crypto = require('crypto');
 
 // @desc    Step 1: Parse Resumes & Generate Draft Questions
 // @route   POST /api/interviews/draft
@@ -33,8 +35,10 @@ const draftInterviewController = async (req, res) => {
 
 
         // File Upload Extraction
+        let resumeTexts = {}; // map of email -> fullText
         if (req.files && req.files.length > 0) {
-            const fileEmails = await processUploadedResumes(req.files);
+            resumeTexts = await processUploadedResumes(req.files);
+            const fileEmails = Object.keys(resumeTexts);
             candidateEmails = [...candidateEmails, ...fileEmails];
         }
 
@@ -85,10 +89,37 @@ const draftInterviewController = async (req, res) => {
             });
         }
 
-        // --- 2. Question Generation ---
-        console.log("Generating draft questions...");
-        const { interviewType, duration, questionCount } = req.body;
-        const questions = await generateInterviewQuestions(jobRole, jobDescription, interviewType, duration, questionCount);
+        // 2. Question Generation
+        const { interviewType, duration, questionCount, questionMode = 'JD_ONLY' } = req.body;
+        console.log(`Generating draft questions | Mode: ${questionMode} | Candidates: ${candidateEmails.length}`);
+        
+        let questions = [];
+        const firstResumeEmail = Object.keys(resumeTexts)[0];
+        const firstResumeText = firstResumeEmail ? resumeTexts[firstResumeEmail] : null;
+
+        if (questionMode === 'CV_ONLY' && !firstResumeText) {
+            console.error("❌ CV_ONLY Error: No resumes parsed successfully.");
+            return res.status(422).json({ 
+                success: false, 
+                message: "No candidates or resume text found. Please ensure you've uploaded valid PDF/DOCX resumes with clear text."
+            });
+        }
+
+        if (questionMode === 'JD_ONLY' || (questionMode !== 'JD_ONLY' && !firstResumeText)) {
+            // Fallback to JD if mode is JD_ONLY or if no candidate resume was found yet
+            console.log("📝 Generating generic JD-based questions as placeholders...");
+            questions = await generateInterviewQuestions(jobRole, jobDescription, interviewType, duration, questionCount);
+        } else if (questionMode === 'CV_ONLY') {
+            // Use the first resume for the draft preview
+            console.log(`📄 CV_ONLY: Generating draft questions from first resume (${firstResumeEmail}).`);
+            questions = await generateCvQuestions(firstResumeText, questionCount);
+        } else if (questionMode === 'HYBRID') {
+            // Hybrid Draft: Merge generic JD and the first resume
+            console.log(`⚖️ HYBRID: Merging JD and first resume for draft preview.`);
+            const jdPortion = await generateInterviewQuestions(jobRole, jobDescription, interviewType, duration, Math.ceil(questionCount/2));
+            const cvPortion = await generateCvQuestions(firstResumeText, Math.floor(questionCount/2));
+            questions = [...jdPortion, ...cvPortion];
+        }
 
         res.status(200).json({
             success: true,
@@ -97,7 +128,9 @@ const draftInterviewController = async (req, res) => {
                 candidateEmails,
                 questions,
                 cooldownInfo,
-                isCooldownViolation: hasViolation
+                isCooldownViolation: hasViolation,
+                questionMode,
+                resumeTexts // Send to frontend so it can be passed back to finalize
             }
         });
 
@@ -114,7 +147,7 @@ const { sendEmail } = require('../services/emailService');
 // @access  Private
 const finalizeInterviewController = async (req, res) => {
     try {
-        const { jobRole, jobDescription, duration, interviewType, candidateEmails, questions } = req.body;
+        const { jobRole, jobDescription, duration, interviewType, candidateEmails, questions, questionMode = 'JD_ONLY', resumeTexts = {} } = req.body;
 
         if (!candidateEmails || !Array.isArray(candidateEmails) || candidateEmails.length === 0) {
             return res.status(400).json({ message: "No candidates provided." });
@@ -124,16 +157,67 @@ const finalizeInterviewController = async (req, res) => {
         let allSuccess = true;
         const createdInterviews = [];
 
-        console.log(`Starting to create interviews for ${candidateEmails.length} candidates...`);
+        console.log(`Starting to create interviews for ${candidateEmails.length} candidates using mode: ${questionMode}...`);
 
-        // Iterate through each candidate and create a UNIQUE interview document
         for (const email of candidateEmails) {
             const cleanEmail = email.toLowerCase().trim();
             const interviewId = uuidv4();
-
-            // Construct Link
             const baseUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
             const link = `${baseUrl}/interview/${interviewId}`;
+
+            // --- PER-CANDIDATE QUESTIONS (CV_ONLY/HYBRID) ---
+            let effectiveQuestions = questions; // Fallback to provided global questions
+            
+            if (questionMode !== 'JD_ONLY') {
+                const cvText = resumeTexts[cleanEmail];
+                if (!cvText) {
+                    console.log(`⚠️ No resume text found for ${cleanEmail}. Skipping personalization.`);
+                    if (questionMode === 'CV_ONLY') {
+                        console.log("🛑 CV_ONLY mode requires resume text. Aborting creation for this candidate.");
+                        results.push({ email: cleanEmail, success: false, message: "Resume required for CV_ONLY mode." });
+                        continue; 
+                    }
+                } else {
+                    try {
+                        // Caching Logic: hash(cvText + jobDescription)
+                        const hash = crypto.createHash('md5').update(cvText + (questionMode === 'HYBRID' ? jobDescription : '')).digest('hex');
+                        
+                        // Check if these questions already exist for this candidate/JD match
+                        let existing = await CandidateInterviewQuestion.findOne({ questionHash: hash });
+                        
+                        if (existing) {
+                            console.log(`♻️ Reusing cached questions for ${cleanEmail} (Hash matched).`);
+                            effectiveQuestions = existing.questions;
+                        } else {
+                            // Generate new questions based on mode
+                            if (questionMode === 'CV_ONLY') {
+                                effectiveQuestions = await generateCvQuestions(cvText, 7);
+                            } else if (questionMode === 'HYBRID') {
+                                // Hybrid: Merging HR-Edited global JD questions with new CV-specific AI questions
+                                const jdPortion = Array.isArray(questions) ? questions.slice(0, 5) : [];
+                                const cvPortion = await generateCvQuestions(cvText, 5); 
+                                
+                                // Final merged set
+                                effectiveQuestions = [...jdPortion, ...cvPortion];
+                                console.log(`⚖️ Hybrid mode: Merged ${jdPortion.length} JD and ${cvPortion.length} CV questions for ${cleanEmail}.`);
+                            }
+                        }
+
+                        // Always ensure a record exists for this specific interview link session
+                        await CandidateInterviewQuestion.create({
+                            interviewId,
+                            candidateEmail: cleanEmail,
+                            questionMode,
+                            questions: effectiveQuestions,
+                            questionHash: hash
+                        });
+
+                    } catch (genError) {
+                        console.error(`❌ Personalization failed for ${cleanEmail}:`, genError.message);
+                        // Fallback to global questions remains as effectiveQuestions
+                    }
+                }
+            }
 
             // --- NEW: Cooldown Logic Check ---
             const CandidateInterviewHistory = require('../models/CandidateInterviewHistory');
@@ -152,17 +236,18 @@ const finalizeInterviewController = async (req, res) => {
             const newInterview = await Interview.create({
                 interviewId,
                 candidateEmail: cleanEmail,
-                candidateEmails: [cleanEmail], // For compatibility with regex search
+                candidateEmails: [cleanEmail],
                 jobRole,
-                role: jobRole, // Dual field support
+                role: jobRole,
                 jobDescription,
                 duration: parseInt(duration),
                 interviewType,
-                questions,
+                questions: effectiveQuestions, // This will be the personalized set if CV/Hybrid
                 interviewLink: link,
                 status: 'Created',
                 companyName,
-                isCooldownViolation: isViolation
+                isCooldownViolation: isViolation,
+                questionMode
             });
 
             createdInterviews.push(newInterview);
@@ -218,6 +303,9 @@ const finalizeInterviewController = async (req, res) => {
                 newInterview.status = 'Created'; // Initial status
             }
             await newInterview.save();
+
+            // Step 13: Logging
+            console.log(`[Interview Creation] Candidate: ${cleanEmail}, ID: ${interviewId}, Mode: ${questionMode}, Timestamp: ${new Date().toISOString()}`);
 
             if (!result.success) allSuccess = false;
         }
