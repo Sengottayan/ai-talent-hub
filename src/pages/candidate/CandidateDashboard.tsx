@@ -23,12 +23,11 @@ import {
 import { useNavigate } from "react-router-dom";
 import { RescheduleDialog } from "@/components/candidate/RescheduleDialog";
 import { ActionRequiredDialog } from "@/components/candidate/ActionRequiredDialog";
-import axios from "axios";
+import api from "@/lib/api";
 import { format, isBefore, subMinutes } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 export default function CandidateDashboard() {
   const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
@@ -49,8 +48,8 @@ export default function CandidateDashboard() {
 
   const fetchInterviews = async () => {
     try {
-      const { data } = await axios.get(
-        `${API_URL}/interviews/my-interviews/${userInfo.email}`,
+      const { data } = await api.get(
+        `/interviews/my-interviews/${userInfo.email}`,
       );
       setInterviews(data.data || []);
     } catch (error) {
@@ -62,12 +61,8 @@ export default function CandidateDashboard() {
 
   const fetchResumeData = async () => {
     try {
-      const config = {
-        headers: { Authorization: `Bearer ${userInfo?.token}` },
-      };
-      const { data } = await axios.get(
-        `${API_URL}/resume/optimize/history`,
-        config,
+      const { data } = await api.get(
+        `/resume/optimize/history`
       );
       if (data.success && data.history && data.history.length > 0) {
         // Get the most recent analysis
@@ -87,8 +82,8 @@ export default function CandidateDashboard() {
 
   const checkRescheduleStatus = async (interview: any) => {
     try {
-      const { data } = await axios.get(
-        `${API_URL}/reschedule/interview/${interview._id}`,
+      const { data } = await api.get(
+        `/reschedule/interview/${interview._id}`,
       );
       if (data.success && data.data) {
         const request = data.data;

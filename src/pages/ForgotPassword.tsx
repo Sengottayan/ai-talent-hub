@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import axios from "axios";
+import api from "@/lib/api";
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");
@@ -40,10 +40,7 @@ export default function ForgotPassword() {
     setIsLoading(true);
 
     try {
-      const API_URL =
-        import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-
-      await axios.post(`${API_URL}/auth/reset-password`, {
+      await api.post(`/auth/reset-password`, {
         email: email.toLowerCase().trim(),
         password: newPassword,
       });

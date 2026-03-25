@@ -12,9 +12,8 @@ import { Switch } from "@/components/ui/switch";
 import { Bell, Lock, User, Eye, EyeOff, Save, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import axios from "axios";
+import api from "@/lib/api";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 export default function HRSettings() {
   const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
@@ -49,10 +48,9 @@ export default function HRSettings() {
 
     setIsSaving(true);
     try {
-      const { data } = await axios.put(
-        `${API_URL}/auth/update-profile`,
-        { name: name.trim(), company: company.trim() },
-        { headers: { Authorization: `Bearer ${userInfo.token}` } },
+      const { data } = await api.put(
+        `/auth/update-profile`,
+        { name: name.trim(), company: company.trim() }
       );
 
       // Update localStorage so the new name is reflected everywhere
@@ -116,7 +114,7 @@ export default function HRSettings() {
 
     setIsUpdatingPass(true);
     try {
-      await axios.post(`${API_URL}/auth/reset-password`, {
+      await api.post(`/auth/reset-password`, {
         email: userInfo.email,
         password: newPassword,
       });

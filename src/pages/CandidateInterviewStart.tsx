@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
-import axios from "axios";
+import api from "@/lib/api";
 import {
   Loader2,
   Phone,
@@ -27,7 +27,7 @@ import { interviewStorage } from "@/lib/interviewStorage";
 import { logger } from "@/lib/logger";
 import CodingConsole from "@/components/interview/CodingConsole";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 
 interface TranscriptMessage {
   role: "user" | "assistant" | "system";
@@ -177,8 +177,8 @@ export default function CandidateInterviewStart() {
 
         // 3. Status Verification (MongoDB-First Restore)
         setStatusMessage("Verifying session status...");
-        const response = await axios.get(
-          `${API_URL}/api/interviews/status/${id}?email=${currentEmail}`,
+        const response = await api.get(
+          `/interviews/status/${id}?email=${currentEmail}`,
         );
         const data = response.data;
 
@@ -195,8 +195,8 @@ export default function CandidateInterviewStart() {
 
         if (data.status === "ready") {
           // Try to claim session first to prevent double-join
-          const claimRes = await axios.post(
-            `${API_URL}/api/interviews/session/claim`,
+          const claimRes = await api.post(
+            `/interviews/session/claim`,
             {
               interviewId: id,
               candidateEmail: currentEmail,
@@ -210,8 +210,8 @@ export default function CandidateInterviewStart() {
           }
 
           // 4. Initialize AI Context & Restore Progress
-          const initResponse = await axios.post(
-            `${API_URL}/api/interviews/initialize/${id}`,
+          const initResponse = await api.post(
+            `/interviews/initialize/${id}`,
             {
               email: currentEmail,
               name: candidateName,
@@ -284,8 +284,8 @@ export default function CandidateInterviewStart() {
     const interval = setInterval(async () => {
       if (isCompleted || isRedirectingRef.current) return;
       try {
-        const res = await axios.post(
-          `${API_URL}/api/interviews/session/claim`,
+        const res = await api.post(
+          `/interviews/session/claim`,
           {
             interviewId: id,
             candidateEmail: interviewInfo?.email,
@@ -327,7 +327,7 @@ export default function CandidateInterviewStart() {
           ? Math.floor((Date.now() - durationStart) / 1000)
           : 0;
 
-        await axios.post(`${API_URL}/api/interviews/submit/${id}`, {
+        await api.post(`/interviews/submit/${id}`, {
           email: interviewInfo?.email,
           responses: transcriptRef.current.map((m) => ({
             question: m.role === "assistant" ? "AI" : "Candidate",
@@ -339,7 +339,7 @@ export default function CandidateInterviewStart() {
         });
 
         // 3. Finalize Session (AI Trigger)
-        await axios.post(`${API_URL}/api/interviews/finalize-session`, {
+        await api.post(`/interviews/finalize-session`, {
           interview_id: id,
           email: interviewInfo?.email,
           fullname: interviewInfo?.candidate_name || "Candidate",
@@ -419,8 +419,8 @@ export default function CandidateInterviewStart() {
       }
 
       // Get Retell Token
-      const tokenResponse = await axios.post(
-        `${API_URL}/api/interviews/retell/token`,
+      const tokenResponse = await api.post(
+        `/interviews/retell/token`,
         {
           interviewId: id,
           email: interviewInfo.email,

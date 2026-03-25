@@ -12,9 +12,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import axios from "axios";
+import api from "@/lib/api";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 interface Candidate {
   _id: string;
@@ -34,10 +33,7 @@ export default function ShortlistedCandidates() {
   useEffect(() => {
     const fetchCandidates = async () => {
       try {
-        const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
-        const { data } = await axios.get(`${API_URL}/auth/users`, {
-          headers: { Authorization: `Bearer ${userInfo.token}` },
-        });
+        const { data } = await api.get(`/auth/users`);
 
         // Filter for candidates and map fields
         const filtered = data

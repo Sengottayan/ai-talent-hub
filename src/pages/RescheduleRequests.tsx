@@ -21,9 +21,8 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
-import axios from "axios";
+import api from "@/lib/api";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 interface RescheduleRequest {
   _id: string;
@@ -90,7 +89,7 @@ export default function RescheduleRequests() {
 
   const fetchRequests = async () => {
     try {
-      const { data } = await axios.get(`${API_URL}/reschedule`);
+      const { data } = await api.get(`/reschedule`);
       setRequests(data);
     } catch (error) {
       console.error("Error fetching reschedule requests:", error);
@@ -111,7 +110,7 @@ export default function RescheduleRequests() {
   const handleApprove = async (id: string) => {
     setActionLoading((prev) => ({ ...prev, [id]: "approve" }));
     try {
-      const { data } = await axios.post(`${API_URL}/reschedule/${id}/approve`);
+      const { data } = await api.post(`/reschedule/${id}/approve`);
       setRequests((prev) =>
         prev.map((r) => (r._id === id ? { ...r, status: "Processing" } : r)),
       );
@@ -136,7 +135,7 @@ export default function RescheduleRequests() {
   const handleReject = async (id: string) => {
     setActionLoading((prev) => ({ ...prev, [id]: "reject" }));
     try {
-      const { data } = await axios.post(`${API_URL}/reschedule/${id}/reject`);
+      const { data } = await api.post(`/reschedule/${id}/reject`);
       setRequests((prev) =>
         prev.map((r) => (r._id === id ? { ...r, status: "Rejected" } : r)),
       );
