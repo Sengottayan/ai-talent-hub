@@ -12,7 +12,7 @@ const {
     getRescheduleByInterview,
     confirmRescheduleCandidate
 } = require('../controllers/rescheduleController');
-const { protectServer } = require('../middleware/authMiddleware');
+const { protect, protectServer } = require('../middleware/authMiddleware');
 
 // ── Candidate Routes ──────────────────────────────────────────────────────────
 router.post('/', createRescheduleRequest);          // Submit reschedule request
@@ -21,10 +21,10 @@ router.get('/interview/:interviewId', getRescheduleByInterview);
 router.post('/:id/candidate-confirm', confirmRescheduleCandidate);
 
 // ── HR Management Routes ──────────────────────────────────────────────────────
-router.get('/', getRescheduleRequests);                         // List all requests
-router.put('/:id', updateRescheduleStatus);                     // Generic status update (fallback)
-router.post('/:id/approve', approveRescheduleRequest);          // HR Approve → triggers n8n
-router.post('/:id/reject', rejectRescheduleRequest);            // HR Reject  → sends rejection email
+router.get('/', protect, getRescheduleRequests);                         // List all requests
+router.put('/:id', protect, updateRescheduleStatus);                     // Generic status update (fallback)
+router.post('/:id/approve', protect, approveRescheduleRequest);          // HR Approve → triggers n8n
+router.post('/:id/reject', protect, rejectRescheduleRequest);            // HR Reject  → sends rejection email
 
 // ── Status Check ──────────────────────────────────────────────────────────────
 router.get('/:id/status', getRescheduleStatus);
