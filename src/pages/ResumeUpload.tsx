@@ -58,9 +58,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import axios from "axios";
+import api from "@/lib/api";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 type TestCase = {
   input: string;
@@ -205,19 +204,14 @@ export default function ResumeUpload() {
     }
 
     try {
-      const userInfo = localStorage.getItem("userInfo");
-      const token = userInfo ? JSON.parse(userInfo).token : null;
-      const config = {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "multipart/form-data",
-        },
-      };
-
-      const response = await axios.post(
-        `${API_URL}/interviews/draft`,
+      const response = await api.post(
+        `/interviews/draft`,
         formData,
-        config,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        },
       );
 
       const {
@@ -332,12 +326,8 @@ export default function ResumeUpload() {
   const handleFinalize = async () => {
     setIsProcessing(true);
     try {
-      const userInfo = localStorage.getItem("userInfo");
-      const token = userInfo ? JSON.parse(userInfo).token : null;
-      const config = { headers: { Authorization: `Bearer ${token}` } };
-
-      const response = await axios.post(
-        `${API_URL}/interviews/finalize`,
+      const response = await api.post(
+        `/interviews/finalize`,
         {
           jobRole,
           jobDescription,
@@ -348,8 +338,7 @@ export default function ResumeUpload() {
           cooldownPeriod: parseInt(cooldownPeriod),
           questionMode, // Send the selected mode
           resumeTexts, // Send the map of email -> text
-        },
-        config,
+        }
       );
 
       const responseData = response.data.data;
@@ -405,14 +394,9 @@ export default function ResumeUpload() {
 
     setIsSharing(true);
     try {
-      const userInfo = localStorage.getItem("userInfo");
-      const token = userInfo ? JSON.parse(userInfo).token : null;
-      const config = { headers: { Authorization: `Bearer ${token}` } };
-
-      await axios.post(
-        `${API_URL}/interviews/share/${interviewData.interviewId}`,
-        { email: shareEmail },
-        config,
+      await api.post(
+        `/interviews/share/${interviewData.interviewId}`,
+        { email: shareEmail }
       );
 
       toast({
@@ -445,7 +429,7 @@ export default function ResumeUpload() {
 
     setIsSuggestingSkills(true);
     try {
-      const response = await axios.post(`${API_URL}/ai/suggest-skills`, {
+      const response = await api.post(`/ai/suggest-skills`, {
         role: aiRole,
       });
       const suggested = response.data.skills || "";
@@ -504,7 +488,7 @@ Please create a professional, detailed job description that includes:
 
 Format it in a clear, professional manner suitable for a job posting.`;
 
-      const response = await axios.post(`${API_URL}/ai/generate-description`, {
+      const response = await api.post(`/ai/generate-description`, {
         prompt,
       });
 

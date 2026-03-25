@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import axios from "axios";
+import api from "@/lib/api";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -28,10 +28,7 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      const API_URL =
-        import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-
-      const { data } = await axios.post(`${API_URL}/auth/login`, {
+      const { data } = await api.post(`/auth/login`, {
         email: email.toLowerCase().trim(),
         password,
       });

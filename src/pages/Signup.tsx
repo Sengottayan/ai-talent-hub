@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import axios from "axios";
+import api from "@/lib/api";
 
 export default function Signup() {
   const [formData, setFormData] = useState({
@@ -62,10 +62,7 @@ export default function Signup() {
     setIsLoading(true);
 
     try {
-      const API_URL =
-        import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-
-      const { data } = await axios.post(`${API_URL}/auth/signup`, {
+      const { data } = await api.post(`/auth/signup`, {
         name: formData.name,
         email: formData.email.toLowerCase().trim(),
         password: formData.password,
@@ -121,7 +118,7 @@ export default function Signup() {
             </div>
             <div className="rounded-lg bg-sidebar-accent p-4">
               <p className="text-2xl font-bold text-sidebar-foreground">24/7</p>
-              <p className="text-sm text-sidebar-muted">AI Support</p>
+              <p className="text-sm text-muted-foreground mr-1 text-sidebar-muted">AI Support</p>
             </div>
           </div>
         </div>

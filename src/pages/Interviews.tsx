@@ -11,9 +11,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import axios from "axios";
-
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+import api from "@/lib/api";
 
 interface Interview {
   _id: string;
@@ -49,16 +47,7 @@ export default function Interviews() {
   const fetchInterviews = async () => {
     setIsLoading(true);
     try {
-      const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
-      const token = userInfo.token;
-
-      const config = {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      };
-
-      const { data } = await axios.get(`${API_URL}/interviews/all`, config);
+      const { data } = await api.get(`/interviews/all`);
       setInterviews(data);
     } catch (error) {
       console.error("Error fetching interviews:", error);
@@ -74,20 +63,7 @@ export default function Interviews() {
   const handleShareEmail = async (interviewId: string) => {
     setIsSending(interviewId);
     try {
-      const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
-      const token = userInfo.token;
-
-      const config = {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      };
-
-      const { data } = await axios.post(
-        `${API_URL}/interviews/resend/${interviewId}`,
-        {},
-        config,
-      );
+      const { data } = await api.post(`/interviews/resend/${interviewId}`, {});
       toast({
         title: "Success",
         description: data.message || "Interview link shared via email.",
