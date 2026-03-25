@@ -71,10 +71,10 @@ export default function Dashboard() {
     const fetchStats = async () => {
       try {
         const { data } = await api.get("/stats/dashboard");
-        setStats(data.stats);
-        setRecentCandidates(data.recentCandidates);
-        setUpcomingInterviews(data.upcomingInterviews);
-        setAnalytics(data.analytics);
+        setStats(data.stats || []);
+        setRecentCandidates(data.recentCandidates || []);
+        setUpcomingInterviews(data.upcomingInterviews || []);
+        setAnalytics(data.analytics || null);
       } catch (error) {
         console.error("Failed to fetch dashboard stats:", error);
       } finally {
@@ -133,7 +133,7 @@ export default function Dashboard() {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={analytics.statusDistribution}
+                      data={analytics.statusDistribution || []}
                       cx="50%"
                       cy="50%"
                       innerRadius={60}
@@ -142,7 +142,7 @@ export default function Dashboard() {
                       dataKey="value"
                       label={({ name, value }) => `${name}: ${value}`}
                     >
-                      {analytics.statusDistribution.map(
+                      {(analytics.statusDistribution || []).map(
                         (entry: any, index: number) => (
                           <Cell
                             key={`cell-${index}`}
@@ -171,7 +171,7 @@ export default function Dashboard() {
               <div className="h-[250px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
-                    data={analytics.scoreDistribution}
+                    data={analytics.scoreDistribution || []}
                     margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -227,26 +227,26 @@ export default function Dashboard() {
                     <div className="flex items-center gap-4">
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
                         {candidate.name
-                          .split(" ")
+                          ?.split(" ")
                           .map((n) => n[0])
-                          .join("")}
+                          .join("") || "?"}
                       </div>
                       <div className="min-w-0">
                         <p className="font-medium text-foreground truncate">
-                          {candidate.name}
+                          {candidate.name || "Unknown"}
                         </p>
                         <p className="text-sm text-muted-foreground truncate">
-                          {candidate.role}
+                          {candidate.role || "N/A"}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center justify-between sm:justify-end gap-3">
                       <span className="text-sm font-medium text-foreground">
-                        {candidate.score}%
+                        {candidate.score || 0}%
                       </span>
-                      <StatusBadge variant={candidate.status as any}>
-                        {candidate.status.charAt(0).toUpperCase() +
-                          candidate.status.slice(1)}
+                      <StatusBadge variant={(candidate.status || "pending") as any}>
+                        {(candidate.status || "pending").charAt(0).toUpperCase() +
+                          (candidate.status || "pending").slice(1)}
                       </StatusBadge>
                     </div>
                   </div>
@@ -278,25 +278,25 @@ export default function Dashboard() {
                     <div className="flex items-center gap-4">
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent/10 text-sm font-semibold text-accent">
                         {interview.candidate
-                          .split(" ")
+                          ?.split(" ")
                           .map((n) => n[0])
-                          .join("")}
+                          .join("") || "?"}
                       </div>
                       <div className="min-w-0">
                         <p className="font-medium text-foreground truncate">
-                          {interview.candidate}
+                          {interview.candidate || "Unknown"}
                         </p>
                         <p className="text-sm text-muted-foreground truncate">
-                          {interview.role}
+                          {interview.role || "N/A"}
                         </p>
                       </div>
                     </div>
                     <div className="flex flex-row sm:flex-col justify-between sm:text-right gap-1 lowercase sm:normal-case">
                       <p className="text-sm font-medium text-foreground">
-                        {interview.time}
+                        {interview.time || "N/A"}
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        {interview.type}
+                        {interview.type || "N/A"}
                       </p>
                     </div>
                   </div>

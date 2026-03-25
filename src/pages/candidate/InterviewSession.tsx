@@ -25,12 +25,10 @@ import {
   CheckCircle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import axios from "axios";
+import api from "@/lib/api";
 import { RetellWebClient } from "retell-client-js-sdk";
 import { VideoPanel } from "@/components/interview/VideoPanel";
 import { InterviewStorage } from "@/utils/InterviewStorage";
-
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 type SessionState =
   | "loading"
@@ -111,7 +109,7 @@ export default function InterviewSession() {
     const fetchInterview = async () => {
       if (!id) return;
       try {
-        const { data } = await axios.get(`${API_URL}/interviews/${id}`);
+        const { data } = await api.get(`/interviews/${id}`);
         setInterviewData(data.data);
 
         if (data.data.status !== "Active" && data.data.status !== "Created") {
@@ -224,7 +222,7 @@ export default function InterviewSession() {
 
   const syncToBackend = async (data: any, status: string) => {
     try {
-      await axios.post(`${API_URL}/interviews/session/save`, {
+      await api.post(`/interviews/session/save`, {
         interviewId: id,
         candidateEmail: candidateEmail || "unknown",
         transcript: data.transcript,
@@ -331,7 +329,7 @@ export default function InterviewSession() {
         role: interviewData?.jobRole,
       });
 
-      const { data } = await axios.post(`${API_URL}/retell/create-web-call`, {
+      const { data } = await api.post(`/retell/create-web-call`, {
         retell_llm_dynamic_variables: {
           candidate_name: finalName,
           job_role: interviewData?.jobRole || "General Role",
@@ -375,7 +373,7 @@ export default function InterviewSession() {
     const finalCandidateId = interviewData?.candidateId || userInfo.user_id;
 
     try {
-      await axios.post(`${API_URL}/interviews/results`, {
+      await api.post(`/interviews/results`, {
         interview_id: id,
         candidate_id: finalCandidateId,
         candidate_name:

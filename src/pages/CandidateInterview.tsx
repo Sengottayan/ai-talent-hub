@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import axios from "axios";
+import api from "@/lib/api";
 import { Loader2, Mic, Send, CheckCircle2 } from "lucide-react";
 
 interface Question {
@@ -46,10 +46,7 @@ export default function CandidateInterview() {
   useEffect(() => {
     const fetchInterview = async () => {
       try {
-        // In a real app, use environment variable for API URL
-        const res = await axios.get(
-          `http://localhost:5000/api/interviews/${id}`,
-        );
+        const res = await api.get(`/interviews/${id}`);
         setInterview(res.data.data);
       } catch (error) {
         console.error(error);
@@ -91,13 +88,9 @@ export default function CandidateInterview() {
   const submitInterview = async (history: Message[]) => {
     setIsSubmitting(true);
     try {
-      const formData = new FormData();
-      formData.append("conversation", JSON.stringify(history));
-
-      const res = await axios.post(
-        `http://localhost:5000/api/interviews/feedback`,
-        { conversation: history },
-      );
+      const res = await api.post(`/interviews/feedback`, {
+        conversation: history,
+      });
       setFeedback(res.data.data);
       setCompleted(true);
     } catch (error) {

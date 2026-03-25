@@ -1,9 +1,7 @@
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
-import axios from "axios";
+import api from "@/lib/api";
 import { logger } from "@/lib/logger";
-
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 interface AntiCheatingMonitorProps {
   interviewId: string;
@@ -82,19 +80,16 @@ const AntiCheatingMonitor: React.FC<AntiCheatingMonitorProps> = ({
         : null;
 
     try {
-      const { data } = await axios.post(
-        `${API_URL}/api/interviews/anti-cheating-event`,
-        {
-          interview_id: interviewId,
-          email: email,
-          candidate_name: candidateName,
-          event_type: eventType,
-          clientId: clientId, // Include clientId for session validation
-          timestamp: new Date().toISOString(),
-          timestamp_str: timestampStr,
-          ...extraData,
-        },
-      );
+      const { data } = await api.post(`/interviews/anti-cheating-event`, {
+        interview_id: interviewId,
+        email: email,
+        candidate_name: candidateName,
+        event_type: eventType,
+        clientId: clientId, // Include clientId for session validation
+        timestamp: new Date().toISOString(),
+        timestamp_str: timestampStr,
+        ...extraData,
+      });
 
       // Handle response
       if (data.interview_status === "auto_completed") {

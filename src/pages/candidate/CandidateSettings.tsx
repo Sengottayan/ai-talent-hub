@@ -22,9 +22,7 @@ import {
 } from "lucide-react";
 import { useState, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
-import axios from "axios";
-
-const API_URL = "http://localhost:5000/api";
+import api from "@/lib/api";
 
 export default function CandidateSettings() {
   const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
@@ -48,9 +46,7 @@ export default function CandidateSettings() {
 
     setIsLoading(true);
     try {
-      const API_URL =
-        import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-      const { data } = await axios.post(`${API_URL}/auth/reset-password`, {
+      const { data } = await api.post(`/auth/reset-password`, {
         email: userInfo.email,
         password: passwords.new,
       });
@@ -96,16 +92,11 @@ export default function CandidateSettings() {
     formData.append("resume", file);
 
     try {
-      const config = {
-        headers: { Authorization: `Bearer ${userInfo?.token}` },
-      };
-      const API_URL =
-        import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-      const { data } = await axios.post(
-        `${API_URL}/resume/optimize`,
-        formData,
-        config,
-      );
+      const { data } = await api.post(`/resume/optimize`, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
 
       if (data.success) {
         toast({

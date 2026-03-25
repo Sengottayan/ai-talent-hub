@@ -85,15 +85,27 @@ const getDashboardStats = async (req, res) => {
         ];
 
         // Upcoming meetings (Filtered by company)
-        const upcomingInterviews = await Interview.find(interviewQuery)
+        const upcomingInterviewsRaw = await Interview.find(interviewQuery)
             .sort({ createdAt: -1 })
             .limit(5);
 
-        const mappedUpcoming = upcomingInterviews.map(i => ({
+        const mappedUpcoming = upcomingInterviewsRaw.map(i => ({
             candidate: i.jobRole || "General",
             role: i.jobDescription?.substring(0, 30) || "Interview",
             time: new Date(i.createdAt).toLocaleDateString(),
             type: i.interviewType || "Technical"
+        }));
+
+        // Fetch Recent Candidates (Assuming candidate model tracks signup time)
+        const recentCandidatesRaw = await Candidate.find({ role: 'candidate' })
+            .sort({ createdAt: -1 })
+            .limit(5);
+
+        const mappedRecent = recentCandidatesRaw.map(c => ({
+            name: c.name,
+            role: "Software Developer", // Placeholder role since Candidate model lacks 'role'
+            status: "shortlisted",      // Placeholder status since Candidate model lacks 'status'
+            score: 85
         }));
 
         // Analytics Data (Filtered)
@@ -113,7 +125,12 @@ const getDashboardStats = async (req, res) => {
             ]
         };
 
-        res.json({ stats, upcomingInterviews: mappedUpcoming, analytics });
+        res.json({
+            stats: stats || [],
+            recentCandidates: mappedRecent || [],
+            upcomingInterviews: mappedUpcoming || [],
+            analytics: analytics || null
+        });
     } catch (error) {
         console.error("Dashboard Stats Error:", error);
         res.status(500).json({ message: error.message });

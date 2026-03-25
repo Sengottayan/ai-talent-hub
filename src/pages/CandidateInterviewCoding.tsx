@@ -10,7 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import axios from "axios";
+import api from "@/lib/api";
 import { Loader2, Code, Play, Send, Clock, TerminalSquare } from "lucide-react";
 import InterviewHeader from "@/components/interview/InterviewHeader";
 import TimerComponent from "@/components/interview/TimerComponent";
@@ -22,8 +22,6 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import Editor from "@monaco-editor/react";
-
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 const LANGUAGES = [
   { value: "javascript", label: "JavaScript" },
@@ -91,13 +89,9 @@ export default function CandidateInterviewCoding() {
       formData.append("language", language);
       formData.append("code", code);
 
-      const response = await axios.post(
-        `${API_URL}/api/interviews/coding-execute`,
-        formData,
-        {
-          headers: { "Content-Type": "multipart/form-data" },
-        },
-      );
+      const response = await api.post(`/interviews/coding-execute`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
 
       if (response.data.success) {
         setOutput(
@@ -128,7 +122,7 @@ export default function CandidateInterviewCoding() {
 
     try {
       // Option to run code one last time on submit (can customize this)
-      await axios.post(`${API_URL}/api/interviews/coding-submission`, {
+      await api.post(`/interviews/coding-submission`, {
         interview_id: id,
         email: interviewInfo?.email,
         candidate_name: interviewInfo?.candidate_name,

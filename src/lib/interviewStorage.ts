@@ -1,7 +1,5 @@
-import axios from "axios";
+import api from "./api";
 import { logger } from "./logger";
-
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 interface TranscriptMessage {
   role: "user" | "assistant" | "system";
@@ -46,7 +44,7 @@ class InterviewStorage {
       this.saveTimeout = setTimeout(async () => {
         if (options?.userEmail) {
           try {
-            await axios.post(`${API_URL}/api/interviews/session/save`, {
+            await api.post(`/interviews/session/save`, {
               interviewId,
               candidateEmail: options.userEmail,
               clientId: options.clientId,
@@ -84,8 +82,8 @@ class InterviewStorage {
 
       // Fallback to backend if email is provided
       if (userEmail) {
-        const response = await axios.get(
-          `${API_URL}/api/interviews/session/${interviewId}/${userEmail}`,
+        const response = await api.get(
+          `/interviews/session/${interviewId}/${userEmail}`,
         );
         if (response.data.success && response.data.data?.currentTranscript) {
           logger.log("✅ Transcript loaded from backend");
@@ -122,7 +120,7 @@ class InterviewStorage {
 
       // Save to backend if email is provided
       if (options?.userEmail) {
-        await axios.post(`${API_URL}/api/interviews/session/save`, {
+        await api.post(`/interviews/session/save`, {
           interviewId,
           candidateEmail: options.userEmail,
           clientId: options.clientId,
@@ -165,16 +163,13 @@ class InterviewStorage {
     metadata?: any,
   ): Promise<any> {
     try {
-      const response = await axios.post(
-        `${API_URL}/api/interviews/session/save`,
-        {
-          interviewId,
-          candidateEmail: userEmail,
-          clientId: metadata?.clientId,
-          status: "Started",
-          ...metadata,
-        },
-      );
+      const response = await api.post(`/interviews/session/save`, {
+        interviewId,
+        candidateEmail: userEmail,
+        clientId: metadata?.clientId,
+        status: "Started",
+        ...metadata,
+      });
       logger.log("✅ Session created/restored");
       return response.data;
     } catch (error) {
@@ -192,14 +187,11 @@ class InterviewStorage {
     clientId: string,
   ): Promise<{ success: boolean; conflict?: boolean; error?: string }> {
     try {
-      const response = await axios.post(
-        `${API_URL}/api/interviews/session/claim`,
-        {
-          interviewId,
-          candidateEmail: userEmail,
-          clientId,
-        },
-      );
+      const response = await api.post(`/interviews/session/claim`, {
+        interviewId,
+        candidateEmail: userEmail,
+        clientId,
+      });
 
       if (response.data.success) {
         logger.log("✅ Session claimed successfully");

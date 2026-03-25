@@ -10,10 +10,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { CalendarIcon, AlertCircle, CheckCircle } from "lucide-react";
 import { format } from "date-fns";
-import axios from "axios";
+import api from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
-
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 interface ActionRequiredDialogProps {
   open: boolean;
@@ -43,8 +41,8 @@ export function ActionRequiredDialog({
     setIsSubmitting(true);
 
     try {
-      await axios.post(
-        `${API_URL}/reschedule/${rescheduleRequest._id}/candidate-confirm`,
+      await api.post(
+        `/reschedule/${rescheduleRequest._id}/candidate-confirm`,
         {
           confirmedDate: selectedDate,
         },

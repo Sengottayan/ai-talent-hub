@@ -35,9 +35,7 @@ import {
 } from "lucide-react";
 import React, { useState, useRef, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
-import axios from "axios";
-
-const API_URL = "http://localhost:5000/api";
+import api from "@/lib/api";
 
 interface AnalysisResult {
   atsScore: number;
@@ -65,22 +63,10 @@ export default function CandidateResume() {
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  const userInfoStr = localStorage.getItem("userInfo");
-  const userInfo = userInfoStr ? JSON.parse(userInfoStr) : null;
-  const config = {
-    headers: {
-      Authorization: `Bearer ${userInfo?.token}`,
-    },
-  };
-
   useEffect(() => {
     const fetchHistory = async () => {
-      if (!userInfo?.token) return;
       try {
-        const { data } = await axios.get(
-          `${API_URL}/resume/optimize/history`,
-          config,
-        );
+        const { data } = await api.get(`/resume/optimize/history`);
         if (data.success) {
           setHistory(data.history);
           if (data.history && data.history.length > 0) {
@@ -125,11 +111,11 @@ export default function CandidateResume() {
     }
 
     try {
-      const { data } = await axios.post(
-        `${API_URL}/resume/optimize`,
-        formData,
-        config,
-      );
+      const { data } = await api.post(`/resume/optimize`, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
 
       if (data.success) {
         setAnalysis(data.analysis);
@@ -139,10 +125,7 @@ export default function CandidateResume() {
         });
 
         // Re-fetch history to update the list
-        const historyRes = await axios.get(
-          `${API_URL}/resume/optimize/history`,
-          config,
-        );
+        const historyRes = await api.get(`/resume/optimize/history`);
         if (historyRes.data.success) setHistory(historyRes.data.history);
       }
     } catch (error: any) {
@@ -161,15 +144,11 @@ export default function CandidateResume() {
     if (!analysis) return;
     setIsGeneratingCoverLetter(true);
     try {
-      const { data } = await axios.post(
-        `${API_URL}/resume/cover-letter`,
-        {
-          targetJobDescription,
-          keyStrengths: analysis.keyStrengths,
-          overallFeedback: analysis.overallFeedback,
-        },
-        config,
-      );
+      const { data } = await api.post(`/resume/cover-letter`, {
+        targetJobDescription,
+        keyStrengths: analysis.keyStrengths,
+        overallFeedback: analysis.overallFeedback,
+      });
 
       if (data.success) {
         setCoverLetter(data.coverLetter);

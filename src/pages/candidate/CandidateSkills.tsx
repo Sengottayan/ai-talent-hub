@@ -25,11 +25,9 @@ import {
 } from "lucide-react";
 import React, { useState, useRef, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
-import axios from "axios";
+import api from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-
-const API_URL = "http://localhost:5000/api";
 
 interface SkillAnalysis {
   skill: string;
@@ -66,11 +64,7 @@ export default function CandidateSkills() {
 
   const fetchHistory = async () => {
     try {
-      const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
-      const token = userInfo.token;
-      const { data } = await axios.get(`${API_URL}/resume/skill-gap/history`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const { data } = await api.get(`/resume/skill-gap/history`);
       if (data.success) {
         setHistory(data.history);
         // Automatically show latest if none selected
@@ -107,18 +101,11 @@ export default function CandidateSkills() {
     formData.append("jobDescription", jobDescription);
 
     try {
-      const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
-      const token = userInfo.token;
-      const { data } = await axios.post(
-        `${API_URL}/resume/skill-gap`,
-        formData,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "multipart/form-data",
-          },
+      const { data } = await api.post(`/resume/skill-gap`, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
         },
-      );
+      });
 
       if (data.success) {
         setResults(data.analysis);

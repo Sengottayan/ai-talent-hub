@@ -11,7 +11,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import axios from "axios";
+import api from "@/lib/api";
 import {
   Loader2,
   Briefcase,
@@ -23,8 +23,6 @@ import {
 import InterviewHeader from "@/components/interview/InterviewHeader";
 import { useInterviewData } from "@/contexts/InterviewDataContext";
 import { logger } from "@/lib/logger";
-
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function CandidateInterviewJoin() {
   const { id } = useParams<{ id: string }>();
@@ -82,7 +80,7 @@ export default function CandidateInterviewJoin() {
 
     const fetchInterview = async () => {
       try {
-        const res = await axios.get(`${API_URL}/api/interviews/${id}`);
+        const res = await api.get(`/interviews/${id}`);
         setInterview(res.data.data);
         logger.log("Interview loaded:", res.data.data);
       } catch (error: any) {
@@ -120,7 +118,7 @@ export default function CandidateInterviewJoin() {
 
     try {
       // Request OTP
-      await axios.post(`${API_URL}/api/interviews/otp/request`, {
+      await api.post(`/interviews/otp/request`, {
         interviewId: id,
         email: email.toLowerCase().trim(),
       });
@@ -148,7 +146,7 @@ export default function CandidateInterviewJoin() {
 
     try {
       // Verify OTP
-      const res = await axios.post(`${API_URL}/api/interviews/otp/verify`, {
+      const res = await api.post(`/interviews/otp/verify`, {
         interviewId: id,
         email: email.toLowerCase().trim(),
         otp: otp,

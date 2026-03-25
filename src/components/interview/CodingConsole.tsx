@@ -17,7 +17,7 @@ import {
   TerminalSquare,
 } from "lucide-react";
 import { toast } from "sonner";
-import axios from "axios";
+import api from "@/lib/api";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -185,7 +185,6 @@ export default function CodingConsole({
     setErrorOutput("");
 
     try {
-      const api_url = import.meta.env.VITE_API_URL || "http://localhost:5000";
       const formData = new FormData();
       formData.append("interview_id", interviewId);
       formData.append("email", candidateEmail);
@@ -197,10 +196,7 @@ export default function CodingConsole({
         formData.append("testCases", JSON.stringify(currentQuestion.testCases));
       }
 
-      const response = await axios.post(
-        `${api_url}/api/interviews/coding-execute`,
-        formData,
-      );
+      const response = await api.post(`/interviews/coding-execute`, formData);
 
       if (response.data.success) {
         setRunOutput(
@@ -237,7 +233,6 @@ export default function CodingConsole({
 
     setIsSubmitting(true);
     try {
-      const api_url = import.meta.env.VITE_API_URL || "http://localhost:5000";
       const submission = {
         questionIndex: currentQuestionIndex,
         question: currentQuestion?.question || currentQuestion?.title,
@@ -250,7 +245,7 @@ export default function CodingConsole({
         submittedAt: new Date().toISOString(),
       };
 
-      await axios.post(`${api_url}/api/interviews/coding-submission`, {
+      await api.post(`/interviews/coding-submission`, {
         interview_id: interviewId,
         email: candidateEmail,
         candidate_name: candidateName,

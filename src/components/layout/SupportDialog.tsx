@@ -18,9 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import axios from "axios";
-
-const API_URL = "http://localhost:5000/api";
+import api from "@/lib/api";
 
 interface SupportDialogProps {
   open: boolean;
@@ -45,7 +43,7 @@ export function SupportDialog({
     setIsSubmitting(true);
 
     try {
-      await axios.post(`${API_URL}/support/contact`, {
+      await api.post(`/support/contact`, {
         name,
         email,
         issueType,

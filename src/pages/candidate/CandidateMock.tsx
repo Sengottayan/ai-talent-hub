@@ -29,9 +29,7 @@ import {
   Upload,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import axios from "axios";
-
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+import api from "@/lib/api";
 
 // Get candidate email from localStorage
 const getUserEmail = () => {
@@ -82,8 +80,8 @@ export default function CandidateMock() {
   const fetchRecentSessions = async () => {
     try {
       setIsLoading(true);
-      const { data } = await axios.get(
-        `${API_URL}/mock-interviews/history/${getUserEmail()}`,
+      const { data } = await api.get(
+        `/mock-interviews/history/${getUserEmail()}`,
       );
       setRecentSessions(data.data || []);
     } catch (error: any) {
@@ -113,10 +111,7 @@ export default function CandidateMock() {
         duration: 30,
       };
 
-      const { data } = await axios.post(
-        `${API_URL}/mock-interviews/create`,
-        payload,
-      );
+      const { data } = await api.post(`/mock-interviews/create`, payload);
 
       if (data.success) {
         toast({

@@ -19,10 +19,8 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import axios from "axios";
+import api from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
-
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 // Business hours: 9 AM to 6 PM slots in 30-min increments
 const TIME_SLOTS = (() => {
@@ -81,7 +79,7 @@ export function RescheduleDialog({
     setIsSubmitting(true);
     setAlreadyPending(false);
     try {
-      await axios.post(`${API_URL}/reschedule`, {
+      await api.post(`/reschedule`, {
         interviewId: interview._id,
         candidateId: candidateId,
         requestedDate: combined.toISOString(), // Full ISO with time
