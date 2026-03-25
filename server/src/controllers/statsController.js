@@ -1,3 +1,7 @@
+const Candidate = require('../models/Candidate');
+const Interview = require('../models/Interview');
+const InterviewResult = require('../models/InterviewResult');
+
 // @desc    Get dashboard stats (Filtered by company for multi-tenancy)
 // @route   GET /api/stats/dashboard
 // @access  Private
