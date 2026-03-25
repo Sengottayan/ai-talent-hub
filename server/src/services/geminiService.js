@@ -10,21 +10,44 @@ const groq = process.env.GROQ_API_KEY ? new OpenAI({
 }) : null;
 
 /**
+ * Helper to wrap promises with a timeout
+ */
+function withTimeout(promise, ms, operationName = "AI Operation") {
+    let timeoutId;
+    const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+            reject(new Error(`${operationName} timed out after ${ms}ms`));
+        }, ms);
+    });
+
+    return Promise.race([promise, timeoutPromise]).finally(() => {
+        clearTimeout(timeoutId);
+    });
+}
+
+/**
  * Helper to call Groq as a fallback
  */
 async function generateWithGroq(prompt, jsonMode = true) {
-    if (!groq) return null;
+    if (!groq) {
+        console.warn("⚠️ Groq SDK not initialized (missing API key)");
+        return null;
+    }
     try {
-        console.log("📡 Falling back to Groq SDK...");
-        const completion = await groq.chat.completions.create({
-            messages: [{ role: 'user', content: prompt }],
-            model: 'llama-3.3-70b-versatile',
-            response_format: jsonMode ? { type: 'json_object' } : undefined,
-            temperature: 0.1
-        });
+        console.log("📡 Falling back to Groq SDK (llama-3.3-70b-versatile)...");
+        const completion = await withTimeout(
+            groq.chat.completions.create({
+                messages: [{ role: 'user', content: prompt }],
+                model: 'llama-3.3-70b-versatile',
+                response_format: jsonMode ? { type: 'json_object' } : undefined,
+                temperature: 0.1
+            }),
+            12000,
+            "Groq"
+        );
         return completion.choices[0]?.message?.content;
     } catch (e) {
-        console.error("❌ Groq SDK Error:", e.message);
+        console.error("❌ Groq SDK Error/Timeout:", e.message);
         return null;
     }
 }
@@ -64,11 +87,15 @@ async function extractEmailsFromText(text) {
         `;
 
     try {
-        // 2. Gemini AI Extraction
-        console.log("📡 Attempting Gemini extraction...");
+        // 2. Gemini AI Extraction (15s timeout)
+        console.log("📡 Attempting email extraction via Gemini...");
         const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-        const result = await model.generateContent(prompt).catch((e) => {
-            console.warn("Gemini direct call failed:", e.message);
+        const result = await withTimeout(
+            model.generateContent(prompt),
+            15000,
+            "Gemini (Extraction)"
+        ).catch((e) => {
+            console.warn("⚠️ [Gemini Extraction Failover] Failed or timed out:", e.message);
             return null;
         });
         
@@ -85,12 +112,12 @@ async function extractEmailsFromText(text) {
                     return Array.from(new Set([...foundByRegex, ...resultList.map(e => e.toLowerCase().trim())]));
                 }
             } catch (e) {
-                console.error("Gemini JSON parse failed:", output);
+                console.error("❌ Gemini JSON parse parse failed for emails:", output);
             }
         }
         
     } catch (error) {
-        console.warn("Gemini pipeline error:", error.message);
+        console.warn("⚠️ Extraction pipeline error:", error.message);
     }
 
     // 3. Groq Fallback (If Gemini fails or returns empty)
@@ -239,10 +266,14 @@ async function generateCvQuestions(cvText, questionCount = 7) {
         `;
 
     try {
-        console.log("📄 Generating CV-based interview questions...");
+        console.log(`📄 Generating ${questionCount} CV questions via Gemini...`);
         const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-        const result = await model.generateContent(prompt);
+        const result = await withTimeout(
+            model.generateContent(prompt),
+            15000,
+            "Gemini (CV Questions)"
+        );
         const response = await result.response;
         let output = response.text().trim();
 
@@ -254,15 +285,21 @@ async function generateCvQuestions(cvText, questionCount = 7) {
         return Array.isArray(questions) ? questions : [];
 
     } catch (error) {
-        console.warn(`⚠️ [Gemini AI Failover] generateCvQuestions: Primary provider hit a quota or error (${error.message}). Trying secondary...`);
+        console.warn(`⚠️ [Gemini AI Failover] generateCvQuestions: Provider hit a timeout or error (${error.message}). Trying Groq...`);
         
         // Try Groq Fallback
         const groqOutput = await generateWithGroq(prompt, true);
         if (groqOutput) {
              try {
                 const questions = JSON.parse(groqOutput);
-                return Array.isArray(questions) ? questions : (questions.questions || []);
-            } catch (e) {}
+                const list = Array.isArray(questions) ? questions : (questions.questions || []);
+                if (list.length > 0) {
+                    console.log("✅ CV-based questions generated via Groq SDK fallback.");
+                    return list;
+                }
+            } catch (e) {
+                console.error("❌ Groq fallback JSON parse error:", e.message);
+            }
         }
         
         return [{ question: "Can you walk me through your most significant project mentioned in your resume?", type: "Experience", difficulty: "Medium" }];
@@ -277,7 +314,7 @@ async function generateCvQuestions(cvText, questionCount = 7) {
  */
 async function generateHybridQuestions(cvText, jobDescription, questionCount = 7) {
     try {
-        console.log("⚖️ Generating Hybrid (CV + JD) interview questions...");
+        console.log("⚖️ Generating Hybrid (CV + JD) interview questions via Gemini...");
         const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
         const prompt = `
@@ -304,7 +341,11 @@ async function generateHybridQuestions(cvText, jobDescription, questionCount = 7
         ${jobDescription.substring(0, 5000)}
         `;
 
-        const result = await model.generateContent(prompt);
+        const result = await withTimeout(
+            model.generateContent(prompt),
+            15000,
+            "Gemini (Hybrid Questions)"
+        );
         const response = await result.response;
         let output = response.text().trim();
 
@@ -316,7 +357,7 @@ async function generateHybridQuestions(cvText, jobDescription, questionCount = 7
         return Array.isArray(questions) ? questions : [];
 
     } catch (error) {
-        console.warn(`⚠️ [Gemini AI Failover] generateHybridQuestions: Primary provider hit a quota or error (${error.message}). Trying secondary...`);
+        console.warn(`⚠️ [Gemini AI Failover] generateHybridQuestions: Timeout/Error (${error.message}). Trying Groq...`);
         
         // Try Groq Fallback
         const groqOutput = await generateWithGroq(prompt, true);
@@ -328,7 +369,9 @@ async function generateHybridQuestions(cvText, jobDescription, questionCount = 7
                     console.log("✅ Hybrid questions generated via Groq fallback.");
                     return list;
                 }
-            } catch (e) {}
+            } catch (e) {
+                 console.error("❌ Hybrid Groq parse error:", e.message);
+            }
         }
         
         return [{ question: "How does your past experience prepare you for the requirements mentioned in our job description?", type: "Technical", difficulty: "Medium" }];
@@ -394,7 +437,11 @@ async function generateInterviewFeedback(conversation) {
         7. Do not output markdown.
         `;
 
-        const result = await model.generateContent(prompt).catch(() => null);
+        const result = await withTimeout(
+            model.generateContent(prompt),
+            25000,
+            "Gemini (Feedback)"
+        ).catch(() => null);
         
         if (result) {
             const response = await result.response;
@@ -405,10 +452,10 @@ async function generateInterviewFeedback(conversation) {
             } catch (e) {}
         }
         
-        throw new Error("Gemini feedback failed or rate limited");
+        throw new Error("Gemini feedback failed or timed out");
 
     } catch (error) {
-        console.warn(`⚠️ [Gemini AI Failover] generateInterviewFeedback: Primary provider hit a quota or error (${error.message}). Trying secondary...`);
+        console.warn(`⚠️ [Gemini AI Feedback Failover] Timeout/Error (${error.message}). Trying Groq...`);
         
         const groqOutput = await generateWithGroq(prompt, true);
         if (groqOutput) {
@@ -421,9 +468,9 @@ async function generateInterviewFeedback(conversation) {
 
         return {
             rating: { TechnicalSkills: 0, Communication: 0, ProblemSolving: 0, Experience: 0, Behavioral: 0, Thinking: 0 },
-            summary: "Error generating feedback via primary and secondary AI.",
+            summary: "Error generating feedback via primary and secondary AI systems.",
             Recommendation: "Review Required",
-            "Recommendation Message": "An error occurred while analyzing the interview."
+            "Recommendation Message": "Evaluation system was unable to analyze the data within the time limit."
         };
     }
 }

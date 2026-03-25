@@ -18,10 +18,11 @@ const getAllResults = async (req, res) => {
     const matchQuery = { interview_id: { $not: /^mock-/ } };
 
     if (req.user.role === 'recruiter') {
-      // Find all interviewIds belonging to this company
-      const companyInterviews = await Interview.find({ companyName }).select('interviewId');
+      // Find all interview IDs (both UUID and Mongo ID) belonging to this company
+      const companyInterviews = await Interview.find({ companyName }).select('interviewId _id');
       const interviewIds = companyInterviews.map(i => i.interviewId);
-      matchQuery.interview_id = { $in: interviewIds };
+      const mongoIds = companyInterviews.map(i => i._id.toString());
+      matchQuery.interview_id = { $in: [...interviewIds, ...mongoIds] };
     }
 
     const results = await InterviewResult.aggregate([

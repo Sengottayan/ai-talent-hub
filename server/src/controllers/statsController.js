@@ -32,19 +32,24 @@ const getDashboardStats = async (req, res) => {
 
         const interviewsScheduled = await Interview.countDocuments(interviewQuery);
 
-        // Filter Results (Logic: only results for this company's interviews)
+        // Filter Results (Logic: results for this company's interviews)
         const resultQuery = {
             interview_id: { $not: /^mock-/ }
         };
 
-        // If recruiter, we need to find all interviewIds for their company first
         if (req.user.role === 'recruiter') {
-            const companyInterviews = await Interview.find({ companyName }).select('interviewId');
-            const interviewIds = companyInterviews.map(i => i.interviewId);
-            resultQuery.interview_id = { $in: interviewIds };
+            const companyInterviews = await Interview.find({ companyName }).select('interviewId _id');
+            const interviewIds = companyInterviews.map(i => i.interviewId); // UUIDs
+            const mongoIds = companyInterviews.map(i => i._id.toString()); // Mongo IDs
+            
+            resultQuery.interview_id = { $in: [...interviewIds, ...mongoIds] };
         }
 
-        const interviewsCompleted = await InterviewResult.countDocuments(resultQuery);
+        const interviewsCompleted = await InterviewResult.countDocuments({
+            ...resultQuery,
+            isCompleted: true // Ensure we only count finished ones
+        });
+        
         const selectedCandidates = await InterviewResult.countDocuments({
             ...resultQuery,
             decision: 'selected'
@@ -108,6 +113,24 @@ const getDashboardStats = async (req, res) => {
             score: 85
         }));
 
+        // Fetch Actual Score Distribution
+        const scoreResults = await InterviewResult.find(resultQuery).select('scores');
+        const scoreDist = { '90-100': 0, '80-89': 0, '70-79': 0, '60-69': 0, '<60': 0 };
+        
+        scoreResults.forEach(r => {
+            // Find the highest score if multiple exist in the Map
+            let maxScore = 0;
+            if (r.scores) {
+               r.scores.forEach(val => { if (val > maxScore) maxScore = val; });
+            }
+            
+            if (maxScore >= 90) scoreDist['90-100']++;
+            else if (maxScore >= 80) scoreDist['80-89']++;
+            else if (maxScore >= 70) scoreDist['70-79']++;
+            else if (maxScore >= 60) scoreDist['60-69']++;
+            else if (maxScore > 0) scoreDist['<60']++;
+        });
+
         // Analytics Data (Filtered)
         const analytics = {
             statusDistribution: [
@@ -116,13 +139,10 @@ const getDashboardStats = async (req, res) => {
                 { name: 'Selected', value: selectedCandidates },
                 { name: 'Rejected', value: Math.max(0, interviewsCompleted - selectedCandidates) }
             ],
-            scoreDistribution: [
-                { name: '90-100', candidates: 5 },
-                { name: '80-89', candidates: 12 },
-                { name: '70-79', candidates: 8 },
-                { name: '60-69', candidates: 3 },
-                { name: '<60', candidates: 2 }
-            ]
+            scoreDistribution: Object.keys(scoreDist).map(key => ({
+                name: key,
+                candidates: scoreDist[key]
+            }))
         };
 
         res.json({

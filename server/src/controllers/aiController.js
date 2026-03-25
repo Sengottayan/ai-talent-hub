@@ -102,12 +102,12 @@ const suggestSkills = async (req, res) => {
             return res.status(400).json({ message: 'Job role is required' });
         }
 
-        const prompt = `Based on the job role "${role}", suggest a comma-separated list of the top 10 most essential technical and soft skills required. format the response ONLY as a comma-separated list of skills, nothing else.`;
+        const prompt = `Based on the job role "${role}", suggest exactly 10 essential technical and soft skills. Format as a comma-separated list ONLY, no extra text. Example: React, Node.js, Problem Solving`;
 
         // Try OpenRouter first
         if (OPENROUTER_API_KEY) {
             try {
-                console.log(`📡 Sending request to OpenRouter (Model: openai/gpt-3.5-turbo)...`);
+                console.log(`📡 Sending suggestion request to OpenRouter...`);
                 const response = await axios.post(
                     'https://openrouter.ai/api/v1/chat/completions',
                     {
@@ -120,7 +120,7 @@ const suggestSkills = async (req, res) => {
                             'Content-Type': 'application/json',
                             'HTTP-Referer': 'https://ai-talent-hub.com',
                         },
-                        timeout: 10000,
+                        timeout: 5000,
                     }
                 );
 
@@ -137,7 +137,7 @@ const suggestSkills = async (req, res) => {
         // Try Groq as fallback
         if (GROQ_API_KEY) {
             try {
-                console.log(`📡 Sending request to Groq (Model: llama3-8b-8192)...`);
+                console.log(`📡 Sending suggestion request to Groq...`);
                 const response = await axios.post(
                     'https://api.groq.com/openai/v1/chat/completions',
                     {
@@ -149,7 +149,7 @@ const suggestSkills = async (req, res) => {
                             'Authorization': `Bearer ${GROQ_API_KEY.trim()}`,
                             'Content-Type': 'application/json',
                         },
-                        timeout: 10000,
+                        timeout: 3000,
                     }
                 );
 

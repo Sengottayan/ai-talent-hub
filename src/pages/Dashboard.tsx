@@ -129,31 +129,38 @@ export default function Dashboard() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="h-[250px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={analytics.statusDistribution || []}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={5}
-                      dataKey="value"
-                      label={({ name, value }) => `${name}: ${value}`}
-                    >
-                      {(analytics.statusDistribution || []).map(
-                        (entry: any, index: number) => (
-                          <Cell
-                            key={`cell-${index}`}
-                            fill={COLORS[index % COLORS.length]}
-                          />
-                        ),
-                      )}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
+              <div className="h-[250px] w-full flex items-center justify-center">
+                {analytics.statusDistribution?.some((d: any) => d.value > 0) ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={analytics.statusDistribution || []}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={5}
+                        dataKey="value"
+                        label={({ name, value }) => value > 0 ? `${name}: ${value}` : ''}
+                      >
+                        {(analytics.statusDistribution || []).map(
+                          (entry: any, index: number) => (
+                            <Cell
+                              key={`cell-${index}`}
+                              fill={COLORS[index % COLORS.length]}
+                            />
+                          ),
+                        )}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="text-center space-y-2">
+                    <p className="text-sm text-muted-foreground">No interview data yet</p>
+                    <p className="text-xs text-muted-foreground/60">Complete your first interview to see stats</p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -168,35 +175,42 @@ export default function Dashboard() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="h-[250px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={analytics.scoreDistribution || []}
-                    margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis
-                      dataKey="name"
-                      tick={{ fontSize: 12 }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      tick={{ fontSize: 12 }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <Tooltip
-                      cursor={{ fill: "transparent" }}
-                      contentStyle={{ borderRadius: "8px" }}
-                    />
-                    <Bar
-                      dataKey="candidates"
-                      fill="#3b82f6"
-                      radius={[4, 4, 0, 0]}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
+              <div className="h-[250px] w-full flex items-center justify-center">
+                {analytics.scoreDistribution?.some((d: any) => d.candidates > 0) ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={analytics.scoreDistribution || []}
+                      margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis
+                        dataKey="name"
+                        tick={{ fontSize: 12 }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 12 }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <Tooltip
+                        cursor={{ fill: "transparent" }}
+                        contentStyle={{ borderRadius: "8px" }}
+                      />
+                      <Bar
+                        dataKey="candidates"
+                        fill="#3b82f6"
+                        radius={[4, 4, 0, 0]}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="text-center space-y-2">
+                    <p className="text-sm text-muted-foreground">No scores yet</p>
+                    <p className="text-xs text-muted-foreground/60">Finalize some interview results to see distributions</p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
