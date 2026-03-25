@@ -31,6 +31,7 @@ export default function Signup() {
     password: "",
     confirmPassword: "",
     role: "candidate",
+    company: "",
   });
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -49,6 +50,15 @@ export default function Signup() {
       return;
     }
 
+    if (formData.role === "recruiter" && !formData.company.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Company name is required for recruiters.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -60,6 +70,7 @@ export default function Signup() {
         email: formData.email.toLowerCase().trim(),
         password: formData.password,
         role: formData.role,
+        company: formData.role === "recruiter" ? formData.company.trim() : "",
       });
 
       localStorage.setItem("userInfo", JSON.stringify(data));
@@ -175,6 +186,26 @@ export default function Signup() {
                 />
               </div>
             </div>
+
+            {formData.role === "recruiter" && (
+              <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                <Label htmlFor="company">Company Name</Label>
+                <div className="relative">
+                  <Building2 className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="company"
+                    type="text"
+                    placeholder="Acme Inc."
+                    value={formData.company}
+                    onChange={(e) =>
+                      setFormData({ ...formData, company: e.target.value })
+                    }
+                    className="pl-10"
+                    required
+                  />
+                </div>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>

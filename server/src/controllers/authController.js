@@ -14,7 +14,7 @@ const generateToken = (id) => {
 // @access  Public
 const registerUser = async (req, res) => {
     const { name, email, password, role, company } = req.body;
-    console.log(`Signup attempt: ${email}, role: ${role}`);
+    console.log(`Signup attempt: ${email}, role: ${role}, company: ${company}`);
 
     try {
         // Check if user exists in either collection

@@ -360,14 +360,25 @@ const submitFeedbackController = async (req, res) => {
 };
 
 
-// @desc    Get All Interviews
+// @desc    Get All Interviews for the logged-in company
 // @route   GET /api/interviews
 // @access  Private
 const getAllInterviewsController = async (req, res) => {
     try {
-        const interviews = await Interview.find({
-            interviewType: { $ne: 'Mock' }
-        }).sort({ createdAt: -1 });
+        const companyName = req.user?.company;
+
+        if (!companyName && req.user.role === 'recruiter') {
+            return res.status(400).json({ message: "Company profile not found. Please update your settings." });
+        }
+
+        const query = { interviewType: { $ne: 'Mock' } };
+        
+        // Apply multi-tenancy filter for recruiters
+        if (req.user.role === 'recruiter') {
+            query.companyName = companyName;
+        }
+
+        const interviews = await Interview.find(query).sort({ createdAt: -1 });
         res.status(200).json(interviews);
     } catch (error) {
         console.error("Get All Interviews Error:", error);

@@ -3,13 +3,29 @@ const Interview = require('../models/Interview');
 const mongoose = require('mongoose');
 const { sendMailNodemailer } = require('../utils/sendMailNodemailer');
 
-// @desc    Get all interview results
+// @desc    Get all interview results (Filtered by company for multi-tenancy)
 // @route   GET /api/interviews/results/all
 // @access  Private
 const getAllResults = async (req, res) => {
   try {
+    const companyName = req.user?.company;
+
+    if (!companyName && req.user.role === 'recruiter') {
+      return res.status(400).json({ message: "Company profile missing." });
+    }
+
+    // --- 1. Identify which results belong to this company ---
+    const matchQuery = { interview_id: { $not: /^mock-/ } };
+
+    if (req.user.role === 'recruiter') {
+      // Find all interviewIds belonging to this company
+      const companyInterviews = await Interview.find({ companyName }).select('interviewId');
+      const interviewIds = companyInterviews.map(i => i.interviewId);
+      matchQuery.interview_id = { $in: interviewIds };
+    }
+
     const results = await InterviewResult.aggregate([
-      { $match: { interview_id: { $not: /^mock-/ } } },
+      { $match: matchQuery },
       { $sort: { createdAt: -1 } },
       {
         $lookup: {
@@ -29,6 +45,7 @@ const getAllResults = async (req, res) => {
     ]);
     res.json(results);
   } catch (error) {
+    console.error("Get All Results Error:", error);
     res.status(500).json({ message: error.message });
   }
 };

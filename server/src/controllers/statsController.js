@@ -1,27 +1,52 @@
-const Candidate = require('../models/Candidate');
-const Interview = require('../models/Interview');
-const InterviewResult = require('../models/InterviewResult');
-
-// @desc    Get dashboard stats
+// @desc    Get dashboard stats (Filtered by company for multi-tenancy)
 // @route   GET /api/stats/dashboard
 // @access  Private
 const getDashboardStats = async (req, res) => {
     try {
+        const companyName = req.user?.company;
+
+        if (!companyName && req.user.role === 'recruiter') {
+            return res.status(400).json({ message: "Company profile not found." });
+        }
+
+        // --- 1. Base Multi-Tenancy Filters ---
+        const baseQuery = {};
+        if (req.user.role === 'recruiter') {
+            baseQuery.companyName = companyName;
+        }
+
+        // Filter Candidate collection if candidates are tied to specific companies (assuming they aren't, but filter interviews/results)
         const totalCandidates = await Candidate.countDocuments();
-        const shortlistedCandidates = await Candidate.countDocuments({ role: 'candidate' }); // Adjust if needed
-        const interviewsScheduled = await Interview.countDocuments({
+        const shortlistedCandidates = await Candidate.countDocuments({ role: 'candidate' });
+
+        // Filter Interviews
+        const interviewQuery = {
+            ...baseQuery,
             status: 'Active',
             interviewType: { $ne: 'Mock' }
-        });
-        const interviewsCompleted = await InterviewResult.countDocuments({
+        };
+
+        const interviewsScheduled = await Interview.countDocuments(interviewQuery);
+
+        // Filter Results (Logic: only results for this company's interviews)
+        const resultQuery = {
             interview_id: { $not: /^mock-/ }
-        }); // Assuming completed means result exists
+        };
+
+        // If recruiter, we need to find all interviewIds for their company first
+        if (req.user.role === 'recruiter') {
+            const companyInterviews = await Interview.find({ companyName }).select('interviewId');
+            const interviewIds = companyInterviews.map(i => i.interviewId);
+            resultQuery.interview_id = { $in: interviewIds };
+        }
+
+        const interviewsCompleted = await InterviewResult.countDocuments(resultQuery);
         const selectedCandidates = await InterviewResult.countDocuments({
-            decision: 'selected',
-            interview_id: { $not: /^mock-/ }
+            ...resultQuery,
+            decision: 'selected'
         });
 
-        // Mock trends (as real historical data might not be available easily without more complex logging)
+        // Dashboard Stats Array
         const stats = [
             {
                 title: "Total Candidates",
@@ -55,20 +80,11 @@ const getDashboardStats = async (req, res) => {
             },
         ];
 
-        // Recent candidates
-        const recentCandidates = await Candidate.find({}).sort({ createdAt: -1 }).limit(5);
-        const mappedRecent = recentCandidates.map(c => ({
-            name: c.name,
-            role: "Candidate", // Assuming role info is in Candidate model or somewhere else
-            status: "pending",
-            score: 0 // Will be updated if result exists
-        }));
+        // Upcoming meetings (Filtered by company)
+        const upcomingInterviews = await Interview.find(interviewQuery)
+            .sort({ createdAt: -1 })
+            .limit(5);
 
-        // Upcoming interviews
-        const upcomingInterviews = await Interview.find({
-            status: 'Active',
-            interviewType: { $ne: 'Mock' }
-        }).sort({ createdAt: -1 }).limit(5);
         const mappedUpcoming = upcomingInterviews.map(i => ({
             candidate: i.jobRole || "General",
             role: i.jobDescription?.substring(0, 30) || "Interview",
@@ -76,7 +92,7 @@ const getDashboardStats = async (req, res) => {
             type: i.interviewType || "Technical"
         }));
 
-        // Analytics Data (Mocked for robust visualization, could be computed via aggregates)
+        // Analytics Data (Filtered)
         const analytics = {
             statusDistribution: [
                 { name: 'Pending', value: interviewsScheduled },
@@ -93,8 +109,9 @@ const getDashboardStats = async (req, res) => {
             ]
         };
 
-        res.json({ stats, recentCandidates: mappedRecent, upcomingInterviews: mappedUpcoming, analytics });
+        res.json({ stats, upcomingInterviews: mappedUpcoming, analytics });
     } catch (error) {
+        console.error("Dashboard Stats Error:", error);
         res.status(500).json({ message: error.message });
     }
 };

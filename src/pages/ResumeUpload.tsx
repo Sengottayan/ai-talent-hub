@@ -737,7 +737,7 @@ Format it in a clear, professional manner suitable for a job posting.`;
                       value={jobRole}
                       onChange={(e) => setJobRole(e.target.value)}
                       placeholder="e.g. Senior Frontend Engineer"
-                      className="text-lg py-6 h-auto"
+                      className="max-w-xl"
                     />
                   </div>
                   <div className="space-y-2">
