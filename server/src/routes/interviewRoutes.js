@@ -58,6 +58,7 @@ router.get('/anti-cheating-state/:interviewId/:email', getAntiCheatingState);
 router.get('/anti-cheating-events/:interviewId/:email', getAntiCheatingEvents);
 
 // NEW: Coding Execution
+// NEW: Coding Execution (Secure Production Sandbox)
 router.post('/coding-execute', upload.none(), async (req, res) => {
     try {
         const { language, code, testCases } = req.body;
@@ -65,133 +66,57 @@ router.post('/coding-execute', upload.none(), async (req, res) => {
             return res.status(400).json({ success: false, message: "Code is required" });
         }
 
-        // We use Piston API for free code execution
-        let pistonLang = language.toLowerCase();
-        let version = "*";
+        const languageMap = {
+            'javascript': { language: 'js', version: '18.15.0' },
+            'python': { language: 'python', version: '3.10.0' },
+            'java': { language: 'java', version: '15.0.2' },
+            'cpp': { language: 'cpp', version: '10.2.0' },
+            'csharp': { language: 'csharp', version: '6.12.0' }
+        };
 
-        if (pistonLang === 'c#') pistonLang = 'csharp';
-        if (pistonLang === 'c++') pistonLang = 'cpp';
+        const target = languageMap[language.toLowerCase()] || { language: language.toLowerCase(), version: '*' };
+        let parsedTestCases = [];
+        try { if (testCases) parsedTestCases = typeof testCases === 'string' ? JSON.parse(testCases) : testCases; } catch (e) { }
 
-        try {
-            const fs = require('fs');
-            const path = require('path');
-            const os = require('os');
-            const crypto = require('crypto');
-            const { exec } = require('child_process');
+        const executeOnPiston = async (sourceCode, stdin = "") => {
+            const resp = await axios.post('https://emkc.org/api/v2/piston/execute', {
+                language: target.language,
+                version: target.version,
+                files: [{ content: sourceCode }],
+                stdin: stdin
+            }, { timeout: 10000 });
+            return resp.data;
+        };
 
-            const executeLocally = (lang, codeStr, stdInp) => {
-                return new Promise((resolve) => {
-                    const uniqueId = crypto.randomBytes(8).toString('hex');
-                    const tmpDir = os.tmpdir();
-                    if (lang === 'javascript') {
-                        const filePath = path.join(tmpDir, `${uniqueId}.js`);
-                        fs.writeFileSync(filePath, codeStr);
-                        const child = exec(`node "${filePath}"`, { timeout: 5000 }, (error, stdout, stderr) => {
-                            try { fs.unlinkSync(filePath); } catch (e) { }
-                            resolve({ output: stdout, stderr: stderr || (error ? error.message : '') });
-                        });
-                        if (stdInp) { child.stdin.write(stdInp); child.stdin.end(); }
-                    } else if (lang === 'python') {
-                        const filePath = path.join(tmpDir, `${uniqueId}.py`);
-                        fs.writeFileSync(filePath, codeStr);
-                        const child = exec(`python "${filePath}"`, { timeout: 5000 }, (error, stdout, stderr) => {
-                            try { fs.unlinkSync(filePath); } catch (e) { }
-                            resolve({ output: stdout, stderr: stderr || (error ? error.message : '') });
-                        });
-                        if (stdInp) { child.stdin.write(stdInp); child.stdin.end(); }
-                    } else if (lang === 'java') {
-                        const dirPath = path.join(tmpDir, uniqueId);
-                        fs.mkdirSync(dirPath);
-                        // Make sure the class is named Main or matches the template
-                        const filePath = path.join(dirPath, `Main.java`);
-                        fs.writeFileSync(filePath, codeStr);
-                        exec(`javac "${filePath}"`, { timeout: 5000 }, (error, stdout, stderr) => {
-                            if (error) {
-                                try { fs.rmSync(dirPath, { recursive: true, force: true }); } catch (e) { }
-                                resolve({ output: '', stderr: stderr || error.message });
-                            } else {
-                                const child = exec(`java -cp "${dirPath}" Main`, { timeout: 5000 }, (err2, out2, stderr2) => {
-                                    try { fs.rmSync(dirPath, { recursive: true, force: true }); } catch (e) { }
-                                    resolve({ output: out2, stderr: stderr2 || (err2 ? err2.message : '') });
-                                });
-                                if (stdInp) { child.stdin.write(stdInp); child.stdin.end(); }
-                            }
-                        });
-                    } else {
-                        resolve({ output: '', stderr: `${lang} is not supported for local execution.` });
-                    }
-                });
-            };
-
-            let parsedTestCases = [];
-            try {
-                if (testCases) parsedTestCases = JSON.parse(testCases);
-            } catch (e) { }
-
-            if (parsedTestCases && parsedTestCases.length > 0) {
-                // Evaluate against test cases
-                let allOutput = "";
-                let allPassed = true;
-                const results = [];
-                for (let i = 0; i < parsedTestCases.length; i++) {
-                    const tc = parsedTestCases[i];
-                    try {
-                        const response = await executeLocally(pistonLang, code, tc.input || "");
-                        const runOut = (response.output || "").trim();
-                        const runErr = response.stderr || "";
-
-                        allOutput += `--- Test Case ${i + 1} ---\n`;
-                        allOutput += `Input: \n${tc.input}\n`;
-                        allOutput += `Expected Output: \n${tc.output}\n`;
-                        allOutput += `Your Output: \n${runOut}\n`;
-                        if (runErr) allOutput += `Errors: \n${runErr}\n`;
-
-                        // Compare ignoring whitespace
-                        const normalize = (str) => (str || "").replace(/\s+/g, ' ').trim();
-                        const passed = normalize(runOut) === normalize(tc.output);
-                        allOutput += `Result: ${passed ? '✅ PASSED' : '❌ FAILED'}\n\n`;
-                        if (!passed) allPassed = false;
-
-                        results.push({
-                            input: tc.input,
-                            expectedOutput: tc.output,
-                            actualOutput: runOut,
-                            passed: passed
-                        });
-                    } catch (err) {
-                        allOutput += `--- Test Case ${i + 1} ---\nFailed to locally execute: ${err.message}\n\n`;
-                        allPassed = false;
-                    }
+        if (parsedTestCases && parsedTestCases.length > 0) {
+            let allOutput = "";
+            let allPassed = true;
+            const results = [];
+            for (let i = 0; i < parsedTestCases.length; i++) {
+                const tc = parsedTestCases[i];
+                try {
+                    const result = await executeOnPiston(code, tc.input || "");
+                    const runOut = (result.run?.stdout || "").trim();
+                    const runErr = (result.run?.stderr || "").trim();
+                    allOutput += `--- Test Case ${i + 1} ---\nInput: ${tc.input}\nExpected: ${tc.output}\nOutput: ${runOut}\n${runErr ? 'Errors: ' + runErr + '\n' : ''}`;
+                    const normalize = (str) => (str || "").replace(/\s+/g, ' ').trim();
+                    const passed = normalize(runOut) === normalize(tc.output);
+                    allOutput += `Result: ${passed ? '✅ PASSED' : '❌ FAILED'}\n\n`;
+                    if (!passed) allPassed = false;
+                    results.push({ input: tc.input, expectedOutput: tc.output, actualOutput: runOut, passed });
+                } catch (err) {
+                    allOutput += `--- Test Case ${i + 1} ---\nExecution Error: ${err.message}\n\n`;
+                    allPassed = false;
                 }
-
-                return res.status(200).json({
-                    success: true,
-                    output: allOutput,
-                    stderr: '',
-                    results,
-                    allPassed
-                });
-            } else {
-                // Run without test cases
-                const response = await executeLocally(pistonLang, code, "");
-                return res.status(200).json({
-                    success: true,
-                    output: response.output,
-                    stderr: response.stderr,
-                    code: code
-                });
             }
-        } catch (execError) {
-            console.error("Local code execution error:", execError.message);
-            return res.status(200).json({
-                success: false,
-                message: 'Local execution failed.',
-                stderr: execError.message
-            });
+            return res.status(200).json({ success: true, output: allOutput, results, allPassed });
+        } else {
+            const result = await executeOnPiston(code, "");
+            return res.status(200).json({ success: true, output: result.run?.stdout || "", stderr: result.run?.stderr || "", code });
         }
     } catch (error) {
-        console.error('Coding execute error:', error);
-        res.status(500).json({ success: false, message: error.message });
+        console.error('Coding execute error:', error.message);
+        res.status(500).json({ success: false, message: "Sandbox execution failed." });
     }
 });
 

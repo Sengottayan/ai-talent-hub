@@ -481,11 +481,17 @@ async function generateInterviewFeedback(conversation) {
 async function generateAIDescription(prompt) {
     if (!prompt) return "Professional job description could not be generated at this time.";
 
+    const systemPrompt = `Return ONLY a professionally formatted plain-text job description. 
+    IMPORTANT: Do not use any markdown formatting like **bold**, *italics*, or # headings. 
+    Use plain text only, with clear spacing and capitalization for sections.
+    
+    Topic: ${prompt}`;
+
     try {
         console.log("📡 Generating job description via Gemini...");
         const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
         const result = await withTimeout(
-            model.generateContent(prompt),
+            model.generateContent(systemPrompt),
             20000,
             "Gemini (Description)"
         );
@@ -493,20 +499,28 @@ async function generateAIDescription(prompt) {
         if (result) {
             const response = await result.response;
             let output = response.text().trim();
-            if (output.startsWith('```')) output = output.replace(/```markdown/g, '').replace(/```/g, '').trim();
-            if (output) {
+            
+            // Clean markdown
+            output = output.replace(/```markdown/g, '').replace(/```/g, '');
+            output = output.replace(/\*\*(.*?)\*\*/g, '$1'); // Strip bold **
+            output = output.replace(/\*(.*?)\*/g, '$1');    // Strip italics *
+            output = output.replace(/^#+\s/gm, '');        // Strip headings #
+            
+            if (output.trim()) {
                 console.log("✅ Description generated via Gemini.");
-                return output;
+                return output.trim();
             }
         }
     } catch (error) {
         console.warn(`⚠️ [Gemini AI Failover] generateAIDescription: Timeout/Error (${error.message}). Trying Groq...`);
         
         // Try Groq Fallback
-        const groqOutput = await generateWithGroq(prompt, false);
+        const groqOutput = await generateWithGroq(systemPrompt, false);
         if (groqOutput) {
+            let cleanGroq = groqOutput.trim();
+            cleanGroq = cleanGroq.replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1').replace(/^#+\s/gm, '');
             console.log("✅ Description generated via Groq fallback.");
-            return groqOutput.trim();
+            return cleanGroq;
         }
     }
 

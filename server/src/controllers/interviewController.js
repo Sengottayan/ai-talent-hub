@@ -420,9 +420,12 @@ const resendInterviewLinkController = async (req, res) => {
             return res.status(404).json({ message: "Interview not found" });
         }
 
-        // Fix port if 8081
-        if (interview.interviewLink && interview.interviewLink.includes(':8081')) {
-            interview.interviewLink = interview.interviewLink.replace(':8081', ':8080');
+        const baseUrl = process.env.FRONTEND_URL || 'https://ai-talent-hub.vercel.app';
+        
+        // Defensive fix for any legacy links
+        if (interview.interviewLink && (interview.interviewLink.includes(':8081') || interview.interviewLink.includes(':8080') || interview.interviewLink.includes('localhost'))) {
+            const path = new URL(interview.interviewLink).pathname;
+            interview.interviewLink = `${baseUrl}${path}`;
             await interview.save();
         }
 
@@ -431,13 +434,11 @@ const resendInterviewLinkController = async (req, res) => {
         let allSuccess = true;
 
         for (const email of interview.candidateEmails) {
-            // Force 8080 if not already present (defensive)
             let currentLink = interview.interviewLink || '';
-            if (currentLink.includes(':8081')) {
-                currentLink = currentLink.replace(':8081', ':8080');
-                // Persist fix
-                interview.interviewLink = currentLink;
-                await interview.save();
+            // Defensive check for this specific email link
+            if (currentLink.includes(':8081') || currentLink.includes(':8080') || currentLink.includes('localhost')) {
+                 const path = new URL(currentLink).pathname;
+                 currentLink = `${baseUrl}${path}`;
             }
 
             console.log(`Resending email to ${email} with link: ${currentLink}`);

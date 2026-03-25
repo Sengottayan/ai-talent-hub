@@ -116,5 +116,7 @@ const interviewSchema = new mongoose.Schema({
 });
 
 interviewSchema.index({ interviewId: 1, candidateEmail: 1 }, { unique: true });
+interviewSchema.index({ companyName: 1, status: 1 });
+interviewSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model('Interview', interviewSchema);
