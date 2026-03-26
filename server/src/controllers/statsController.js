@@ -158,7 +158,7 @@ const getDashboardStats = async (req, res) => {
                 { name: 'Selected', value: selectedCandidates },
                 { name: 'Rejected', value: rejectedCandidates },
                 { name: 'On Hold', value: onHoldCandidates }
-            ],
+            ].filter(item => item.value > 0),
             scoreDistribution: Object.keys(scoreDist).map(key => ({
                 name: key,
                 candidates: scoreDist[key]

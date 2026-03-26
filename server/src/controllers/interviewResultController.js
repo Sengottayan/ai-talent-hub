@@ -294,12 +294,12 @@ const upsertResult = async (req, res) => {
 </body>
 </html>`;
 
-        await sendMailNodemailer(
+        sendMailNodemailer(
           email,
           `🎉 Offer: You have been selected for ${jobRole}`,
           html
-        );
-        console.log(`📧 Selection email sent to ${email}`);
+        ).then(() => console.log(`📧 Selection email sent to ${email}`))
+         .catch(err => console.error(`❌ Selection email failed for ${email}:`, err.message));
       }
 
       // ─── REJECTED ───
@@ -382,12 +382,12 @@ const upsertResult = async (req, res) => {
 </body>
 </html>`;
 
-        await sendMailNodemailer(
+        sendMailNodemailer(
           email,
           `Update regarding your interview for ${jobRole}`,
           html
-        );
-        console.log(`📧 Rejection email sent to ${email}`);
+        ).then(() => console.log(`📧 Rejection email sent to ${email}`))
+         .catch(err => console.error(`❌ Rejection email failed for ${email}:`, err.message));
       }
     }
 
