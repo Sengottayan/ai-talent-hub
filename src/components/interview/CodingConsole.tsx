@@ -268,7 +268,7 @@ export default function CodingConsole({
   };
 
   return (
-    <div className="w-full flex-1 overflow-hidden h-[calc(100vh-140px)] bg-slate-50 border border-slate-200 rounded-lg shadow-sm">
+    <div className="w-full flex-1 overflow-hidden h-full bg-slate-50 border border-slate-200 rounded-lg shadow-sm">
       <ResizablePanelGroup direction="horizontal" className="h-full w-full">
         {/* Left Panel: Problem Description */}
         <ResizablePanel

@@ -65,6 +65,7 @@ export default function CandidateInterviewStart() {
   const [readyToStart, setReadyToStart] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [isRestored, setIsRestored] = useState(false);
+  const [showCodingConsole, setShowCodingConsole] = useState(false);
 
   const transcriptRef = useRef<TranscriptMessage[]>([]);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -505,6 +506,12 @@ export default function CandidateInterviewStart() {
               const lastMsg = newMessages[newMessages.length - 1];
               if (lastMsg.role === "assistant") {
                 setCurrentMessage(lastMsg.content);
+
+                // Auto-expand coding console if coding keywords are detected
+                const codingKeywords = ["code", "coding", "editor", "programming", "challenge", "problem", "solve"];
+                if (codingKeywords.some(keyword => lastMsg.content.toLowerCase().includes(keyword))) {
+                  setShowCodingConsole(true);
+                }
               }
             }
           }
@@ -757,11 +764,22 @@ export default function CandidateInterviewStart() {
                   </CardContent>
                 </Card>
 
+                {currentMessage && (
+                  <div className="bg-blue-600 text-white p-6 rounded-3xl shadow-lg border border-blue-400/30 animate-in fade-in slide-in-from-top-4">
+                    <p className="text-lg font-medium leading-relaxed italic">
+                      "{currentMessage}"
+                    </p>
+                  </div>
+                )}
+
                 {hasCoding && (
                   <div className="mt-4 animate-in slide-in-from-bottom-5 duration-700">
                     <Card className="border-violet-200 bg-violet-50/50">
                       <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
+                        <div 
+                          className="flex items-center justify-between cursor-pointer" 
+                          onClick={() => setShowCodingConsole(!showCodingConsole)}
+                        >
                           <div className="flex items-center gap-3">
                             <div className="p-2 bg-violet-600 rounded-lg">
                               <Code className="w-5 h-5 text-white" />
@@ -776,20 +794,25 @@ export default function CandidateInterviewStart() {
                               </p>
                             </div>
                           </div>
+                          <Button variant="ghost" size="sm" className="text-violet-600 font-bold">
+                            {showCodingConsole ? "Hide Console" : "Open Console"}
+                          </Button>
                         </div>
-                        <div className="mt-4 h-[400px]">
-                          <CodingConsole
-                            questions={questions.filter(
-                              (q: any) =>
-                                q.type === "Coding" ||
-                                q.type === "Problem Solving",
-                            )}
-                            interviewId={id!}
-                            candidateEmail={interviewInfo.email}
-                            candidateName={interviewInfo.candidate_name}
-                            onComplete={() => {}} // Handle implicitly
-                          />
-                        </div>
+                        {showCodingConsole && (
+                          <div className="mt-4 h-[600px] overflow-hidden rounded-xl border border-violet-100 shadow-inner">
+                            <CodingConsole
+                              questions={questions.filter(
+                                (q: any) =>
+                                  q.type === "Coding" ||
+                                  q.type === "Problem Solving",
+                              )}
+                              interviewId={id!}
+                              candidateEmail={interviewInfo.email}
+                              candidateName={interviewInfo.candidate_name}
+                              onComplete={() => {}} // Handle implicitly
+                            />
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                   </div>
@@ -836,16 +859,9 @@ export default function CandidateInterviewStart() {
                   </CardContent>
                 </Card>
 
-                {currentMessage && (
-                  <div className="bg-blue-600 text-white p-6 rounded-3xl shadow-lg border border-blue-400/30 animate-in fade-in slide-in-from-top-4">
-                    <p className="text-lg font-medium leading-relaxed italic">
-                      "{currentMessage}"
-                    </p>
-                  </div>
-                )}
               </div>
 
-              <div className="space-y-6">
+              <div className="space-y-6 lg:sticky lg:top-8 lg:h-[calc(100vh-100px)] flex flex-col">
                 <Card className="h-[calc(100vh-250px)] border-none shadow-xl flex flex-col">
                   <CardContent className="p-6 flex flex-col h-full">
                     <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
