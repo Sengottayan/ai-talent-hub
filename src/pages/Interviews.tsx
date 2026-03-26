@@ -11,6 +11,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { Skeleton } from "@/components/ui/skeleton";
 import api from "@/lib/api";
 
 interface Interview {
@@ -104,8 +105,48 @@ export default function Interviews() {
 
   if (isLoading) {
     return (
-      <div className="flex h-[60vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="space-y-8 animate-in fade-in duration-500">
+        <div className="space-y-2">
+          <Skeleton className="h-10 w-64 bg-slate-200" />
+          <Skeleton className="h-4 w-96 bg-slate-100" />
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-3">
+          {[...Array(3)].map((_, i) => (
+            <Card key={i} className="border-none shadow-sm overflow-hidden">
+               <CardContent className="flex items-center gap-4 p-6">
+                 <Skeleton className="h-12 w-12 rounded-lg bg-primary/5" />
+                 <div className="space-y-2 flex-1">
+                   <Skeleton className="h-8 w-16 bg-slate-200" />
+                   <Skeleton className="h-4 w-24 bg-slate-100" />
+                 </div>
+               </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        <Card className="border-none shadow-sm">
+          <CardHeader>
+            <Skeleton className="h-6 w-80 bg-slate-200" />
+          </CardHeader>
+          <CardContent className="space-y-4">
+             {[...Array(3)].map((_, i) => (
+               <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between rounded-xl border border-dashed p-5 gap-4">
+                  <div className="flex items-center gap-4 flex-1">
+                    <Skeleton className="h-12 w-12 rounded-full bg-slate-100" />
+                    <div className="space-y-2">
+                       <Skeleton className="h-5 w-40 bg-slate-200" />
+                       <Skeleton className="h-4 w-32 bg-slate-100" />
+                    </div>
+                  </div>
+                  <div className="space-y-2 sm:text-right">
+                    <Skeleton className="h-3 w-48 bg-slate-50 ml-auto" />
+                    <Skeleton className="h-9 w-40 bg-primary/10 ml-auto" />
+                  </div>
+               </div>
+             ))}
+          </CardContent>
+        </Card>
       </div>
     );
   }

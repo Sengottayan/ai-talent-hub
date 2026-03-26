@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Card,
   CardContent,
@@ -86,7 +87,61 @@ export default function Dashboard() {
   }, []);
 
   if (isLoading) {
-    return <div className="text-center p-8">Loading dashboard...</div>;
+    return (
+      <div className="space-y-8 animate-in fade-in duration-500">
+        <div className="space-y-2">
+          <Skeleton className="h-10 w-48 bg-slate-200" />
+          <Skeleton className="h-4 w-64 bg-slate-100" />
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          {[...Array(5)].map((_, i) => (
+            <Card key={i} className="border-none shadow-sm overflow-hidden">
+               <CardContent className="p-6 space-y-4">
+                  <div className="flex justify-between items-start">
+                    <div className="space-y-3 flex-1">
+                      <Skeleton className="h-4 w-24 bg-slate-100" />
+                      <Skeleton className="h-10 w-16 bg-slate-200" />
+                      <Skeleton className="h-3 w-32 bg-slate-100" />
+                    </div>
+                    <Skeleton className="h-12 w-12 rounded-xl bg-primary/5" />
+                  </div>
+               </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card className="border-none shadow-sm">
+            <CardHeader><Skeleton className="h-6 w-40 bg-slate-200" /></CardHeader>
+            <CardContent><Skeleton className="h-[250px] w-full bg-slate-50 rounded-xl" /></CardContent>
+          </Card>
+          <Card className="border-none shadow-sm">
+            <CardHeader><Skeleton className="h-6 w-40 bg-slate-200" /></CardHeader>
+            <CardContent><Skeleton className="h-[250px] w-full bg-slate-50 rounded-xl" /></CardContent>
+          </Card>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card className="border-none shadow-sm">
+            <CardHeader><Skeleton className="h-6 w-40 bg-slate-200" /></CardHeader>
+            <CardContent className="space-y-4">
+              {[...Array(3)].map((_, i) => (
+                <Skeleton key={i} className="h-20 w-full bg-slate-50 rounded-lg" />
+              ))}
+            </CardContent>
+          </Card>
+          <Card className="border-none shadow-sm">
+            <CardHeader><Skeleton className="h-6 w-40 bg-slate-200" /></CardHeader>
+            <CardContent className="space-y-4">
+              {[...Array(3)].map((_, i) => (
+                <Skeleton key={i} className="h-20 w-full bg-slate-50 rounded-lg" />
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
   }
 
   return (

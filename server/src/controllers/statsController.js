@@ -134,13 +134,30 @@ const getDashboardStats = async (req, res) => {
             else if (maxScore > 0) scoreDist['<60']++;
         });
 
+        const rejectedCandidates = await InterviewResult.countDocuments({
+            ...resultQuery,
+            decision: 'rejected'
+        });
+
+        const onHoldCandidates = await InterviewResult.countDocuments({
+            ...resultQuery,
+            decision: 'on-hold'
+        });
+
+        const pendingDecisionCandidates = await InterviewResult.countDocuments({
+            ...resultQuery,
+            isCompleted: true,
+            decision: 'pending'
+        });
+
         // Analytics Data (Filtered)
         const analytics = {
             statusDistribution: [
-                { name: 'Pending', value: interviewsScheduled },
-                { name: 'Completed', value: interviewsCompleted },
+                { name: 'In Pipeline', value: interviewsScheduled },
+                { name: 'Under Review', value: pendingDecisionCandidates },
                 { name: 'Selected', value: selectedCandidates },
-                { name: 'Rejected', value: Math.max(0, interviewsCompleted - selectedCandidates) }
+                { name: 'Rejected', value: rejectedCandidates },
+                { name: 'On Hold', value: onHoldCandidates }
             ],
             scoreDistribution: Object.keys(scoreDist).map(key => ({
                 name: key,
