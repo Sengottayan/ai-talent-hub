@@ -314,20 +314,7 @@ export default function HRSettings() {
           </CardContent>
         </Card>
 
-        {/* ── Danger Zone ────────────────────────────────────────── */}
-        <Card className="border-destructive/20 bg-destructive/5">
-          <CardHeader>
-            <CardTitle className="text-destructive">Danger Zone</CardTitle>
-            <CardDescription>
-              Delete your account and all associated data.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button variant="destructive" className="w-full">
-              Delete Account
-            </Button>
-          </CardContent>
-        </Card>
+
       </div>
     </div>
   );

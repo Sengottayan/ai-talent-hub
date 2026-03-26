@@ -58,20 +58,30 @@ export default function CandidateInterviewJoin() {
       setTimeout(() => setConflict(false), 10000); // Reset after 10s (matching server timeout)
     }
 
-    // Check for pre-filled data from dashboard
-    if (location.state) {
+    // Check URL Query Parameters (from Email/Direct Link)
+    const searchParams = new URLSearchParams(location.search);
+    const urlEmail = searchParams.get('email');
+    const urlName = searchParams.get('fullname') || searchParams.get('name');
+
+    if (urlEmail) {
+      setEmail(urlEmail);
+      setIsReadOnly(true);
+    }
+    if (urlName) setName(urlName);
+
+    // Check for pre-filled data from dashboard/internal state
+    if (location.state && !urlEmail) {
       if (location.state.candidateName) setName(location.state.candidateName);
-      if (location.state.candidateEmail)
-        setEmail(location.state.candidateEmail);
+      if (location.state.candidateEmail) setEmail(location.state.candidateEmail);
       if (location.state.readOnly) setIsReadOnly(true);
-    } else {
+    } else if (!urlEmail) {
       // Fallback to localStorage if available
       const storedUser = localStorage.getItem("userInfo");
       if (storedUser) {
         try {
           const parsed = JSON.parse(storedUser);
-          if (parsed.name) setName(parsed.name);
-          if (parsed.email) setEmail(parsed.email);
+          if (parsed.name && !name) setName(parsed.name);
+          if (parsed.email && !email) setEmail(parsed.email);
         } catch (e) {
           console.error("Error parsing userInfo", e);
         }

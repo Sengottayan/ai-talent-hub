@@ -266,7 +266,7 @@ const finalizeInterviewController = async (req, res) => {
                     <li>Type: ${interviewType}</li>
                 </ul>
                 <p>Please click the link below to start your interview:</p>
-                <p><a href="${link}">${link}</a></p>
+                <p><a href="${link}?email=${encodeURIComponent(cleanEmail)}">${link}</a></p>
                 <br>
                 <p>Good luck!</p>
             `;
@@ -453,7 +453,7 @@ const resendInterviewLinkController = async (req, res) => {
                     <li>Type: ${interview.interviewType}</li>
                 </ul>
                 <p>Please click the link below to start your interview:</p>
-                <p><a href="${currentLink}">${currentLink}</a></p>
+                <p><a href="${currentLink}?email=${encodeURIComponent(email)}">${currentLink}</a></p>
                 <br>
                 <p>Good luck!</p>
             `;
@@ -577,7 +577,7 @@ const shareInterviewLinkController = async (req, res) => {
                 <li>Type: ${interview.interviewType}</li>
             </ul>
             <p>Please click the link below to start your interview:</p>
-            <p><a href="${newLink}">${newLink}</a></p>
+            <p><a href="${newLink}?email=${encodeURIComponent(email.toLowerCase().trim())}">${newLink}</a></p>
             <br>
             <p>Good luck!</p>
         `;

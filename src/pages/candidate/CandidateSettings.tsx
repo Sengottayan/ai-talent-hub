@@ -272,19 +272,7 @@ export default function CandidateSettings() {
           </CardContent>
         </Card>
 
-        <Card className="border-destructive/20 bg-destructive/5">
-          <CardHeader>
-            <CardTitle className="text-destructive">Danger Zone</CardTitle>
-            <CardDescription>
-              Once you delete your account, there is no going back.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button variant="destructive" className="w-full">
-              Delete Account
-            </Button>
-          </CardContent>
-        </Card>
+
       </div>
     </div>
   );
