@@ -52,6 +52,7 @@ const getDashboardStats = async (req, res) => {
         
         const selectedCandidates = await InterviewResult.countDocuments({
             ...resultQuery,
+            isCompleted: true,
             decision: 'selected'
         });
 
@@ -65,7 +66,7 @@ const getDashboardStats = async (req, res) => {
             },
             {
                 title: "In Pipeline",
-                value: shortlistedCandidates,
+                value: interviewsScheduled, // Consistent with Pie chart
                 icon: "Users",
                 trend: { value: 8, isPositive: true },
             },
@@ -131,24 +132,23 @@ const getDashboardStats = async (req, res) => {
             else if (maxScore >= 80) scoreDist['80-89']++;
             else if (maxScore >= 70) scoreDist['70-79']++;
             else if (maxScore >= 60) scoreDist['60-69']++;
-            else if (maxScore > 0) scoreDist['<60']++;
+            else scoreDist['<60']++;
         });
 
         const rejectedCandidates = await InterviewResult.countDocuments({
             ...resultQuery,
+            isCompleted: true,
             decision: 'rejected'
         });
 
         const onHoldCandidates = await InterviewResult.countDocuments({
             ...resultQuery,
+            isCompleted: true,
             decision: 'on-hold'
         });
 
-        const pendingDecisionCandidates = await InterviewResult.countDocuments({
-            ...resultQuery,
-            isCompleted: true,
-            decision: 'pending'
-        });
+        // "Under Review" should encompass all completed interviews that are NOT Selected/Rejected/On Hold
+        const pendingDecisionCandidates = Math.max(0, interviewsCompleted - (selectedCandidates + rejectedCandidates + onHoldCandidates));
 
         // Analytics Data (Filtered)
         const analytics = {
