@@ -66,7 +66,13 @@ export default function Dashboard() {
   const [analytics, setAnalytics] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const COLORS = ["#0ea5e9", "#10b981", "#6366f1", "#f43f5e", "#f59e0b"];
+  const STATUS_COLORS: { [key: string]: string } = {
+    "In Pipeline": "#0ea5e9", // Sky Blue
+    "Under Review": "#6366f1", // Indigo
+    Selected: "#10b981", // Emerald Green
+    Rejected: "#ef4444", // Bright Red
+    "On Hold": "#f59e0b", // Amber/Orange
+  };
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -202,7 +208,7 @@ export default function Dashboard() {
                           (entry: any, index: number) => (
                             <Cell
                               key={`cell-${index}`}
-                              fill={COLORS[index % COLORS.length]}
+                              fill={STATUS_COLORS[entry.name] || "#94a3b8"} // Fallback to slate-400
                               stroke="transparent"
                             />
                           ),
