@@ -27,6 +27,8 @@ const antiCheatingEventSchema = new mongoose.Schema({
             'mouse_leave',
             'mouse_enter',
             'tab_switch',
+            'multi_face_detected',
+            'no_face_detected',
             'termination'
         ],
         required: true

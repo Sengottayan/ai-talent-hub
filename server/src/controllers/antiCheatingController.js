@@ -9,7 +9,9 @@ const SCORING_RULES = {
     window_blur: 1.5,     // Window lost focus
     mouse_leave: 0.5,     // Mouse left window (less severe)
     window_focus: -0.5,   // Returned to window (slight recovery)
-    mouse_enter: 0        // Mouse returned (no penalty)
+    mouse_enter: 0,        // Mouse returned (no penalty)
+    multi_face_detected: 3.0, // High penalty for multiple people
+    no_face_detected: 0.5    // Low penalty for empty frame
 };
 
 const MAX_ALLOWED_SCORE = 10; // Auto-terminate threshold (increased from 5 for better UX)

@@ -67,6 +67,8 @@ export default function InterviewSession() {
   >([]);
   const [tabSwitchCount, setTabSwitchCount] = useState(0);
   const [backNavAttempts, setBackNavAttempts] = useState(0);
+  const [multiFaceCount, setMultiFaceCount] = useState(0);
+  const [noFaceCount, setNoFaceCount] = useState(0);
 
   // Transcript State
   const [currentTranscript, setCurrentTranscript] = useState("");
@@ -185,11 +187,16 @@ export default function InterviewSession() {
 
   // 3. AUTO-TERMINATION Logic
   useEffect(() => {
-    const totalViolations = tabSwitchCount + backNavAttempts;
-    if (totalViolations >= 5 && sessionState === "interview") {
-      handleEndInterview("Terminated", "Exceeded violation threshold");
+    const totalViolations = 
+      tabSwitchCount + 
+      backNavAttempts + 
+      (multiFaceCount * 2) + // Multi-face is more severe
+      Math.floor(noFaceCount / 5); // 5 "no-face" events equal 1 violation
+
+    if (totalViolations >= 10 && sessionState === "interview") {
+      handleEndInterview("Terminated", "Exceeded security violation threshold");
     }
-  }, [tabSwitchCount, backNavAttempts, sessionState]);
+  }, [tabSwitchCount, backNavAttempts, multiFaceCount, noFaceCount, sessionState]);
 
   // 4. PERSISTENCE
   useEffect(() => {
@@ -246,7 +253,31 @@ export default function InterviewSession() {
   const handleFaceStatus = useCallback(
     (isDetected: boolean) => {
       if (!isDetected && sessionState === "interview") {
-        handleViolation("face_not_detected", "Face not visible in camera");
+        setNoFaceCount(prev => prev + 1);
+        // Only log to violations array every few seconds to avoid flood
+        if (noFaceCount % 10 === 0) {
+           handleViolation("no_face_detected", "Candidate's face is not visible in camera.");
+           toast({
+            title: "Face Not Detected",
+            description: "Please stay in front of the camera.",
+            variant: "destructive",
+          });
+        }
+      }
+    },
+    [handleViolation, sessionState, noFaceCount],
+  );
+
+  const handleMultiFaceStatus = useCallback(
+    (isMulti: boolean) => {
+      if (isMulti && sessionState === "interview") {
+        setMultiFaceCount(prev => prev + 1);
+        handleViolation("multi_face_detected", "Multiple people detected in frame.");
+        toast({
+          title: "Security Violation",
+          description: "Multiple people detected. This is being recorded.",
+          variant: "destructive",
+        });
       }
     },
     [handleViolation, sessionState],
@@ -437,13 +468,13 @@ export default function InterviewSession() {
                 </p>
               </div>
             </div>
-            {tabSwitchCount + backNavAttempts > 0 && (
+            {tabSwitchCount + backNavAttempts + multiFaceCount > 0 && (
               <Badge
                 variant="destructive"
                 className="ml-4 flex gap-1 items-center animate-in fade-in zoom-in"
               >
                 <ShieldAlert className="h-3 w-3" />
-                {tabSwitchCount + backNavAttempts} Violations
+                {tabSwitchCount + backNavAttempts + multiFaceCount} Violations
               </Badge>
             )}
           </div>
@@ -512,6 +543,7 @@ export default function InterviewSession() {
               <VideoPanel
                 isActive={sessionState === "interview"}
                 onFaceDetectedStatusChange={handleFaceStatus}
+                onMultiFaceStatusChange={handleMultiFaceStatus}
               />
               <div className="absolute bottom-3 left-3 px-2 py-1 bg-black/60 backdrop-blur rounded text-[10px] text-white/70 font-mono border border-white/10">
                 {candidateName} (You)

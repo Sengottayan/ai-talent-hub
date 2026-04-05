@@ -3,18 +3,26 @@ import { toast } from "@/hooks/use-toast";
 
 interface VideoPanelProps {
   onFaceDetectedStatusChange: (isDetected: boolean) => void;
+  onMultiFaceStatusChange?: (isMulti: boolean) => void;
   isActive: boolean;
 }
 
 export const VideoPanel: React.FC<VideoPanelProps> = ({
   onFaceDetectedStatusChange,
+  onMultiFaceStatusChange,
   isActive,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [faceDetected, setFaceDetected] = useState(true);
+  const [multiFaceDetected, setMultiFaceDetected] = useState(false);
+  
+  // Smoothing buffers to avoid rapid state changes (Production Level Stability)
+  const faceStateBuffer = useRef<boolean[]>([]);
+  const multiStateBuffer = useRef<boolean[]>([]);
+  const BUFFER_SIZE = 3; 
 
-  // 1. Initialize Camera
+  // Camera Management
   useEffect(() => {
     const startCamera = async () => {
       if (!isActive) return;
@@ -29,7 +37,6 @@ export const VideoPanel: React.FC<VideoPanelProps> = ({
         }
       } catch (e) {
         console.error("Camera access denied:", e);
-        // Assume face not detected if camera fails
         setFaceDetected(false);
         onFaceDetectedStatusChange(false);
       }
@@ -38,7 +45,6 @@ export const VideoPanel: React.FC<VideoPanelProps> = ({
     if (isActive) {
       startCamera();
     } else {
-      // Stop tracks if inactive
       if (videoRef.current && videoRef.current.srcObject) {
         const stream = videoRef.current.srcObject as MediaStream;
         stream.getTracks().forEach((t) => t.stop());
@@ -46,7 +52,6 @@ export const VideoPanel: React.FC<VideoPanelProps> = ({
     }
   }, [isActive]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (videoRef.current && videoRef.current.srcObject) {
@@ -56,7 +61,7 @@ export const VideoPanel: React.FC<VideoPanelProps> = ({
     };
   }, []);
 
-  // 2. Simple Pixel-Based Skin Detection (Proxy for Face)
+  // Enhanced Detection Cycle
   useEffect(() => {
     if (!isActive) return;
 
@@ -65,52 +70,132 @@ export const VideoPanel: React.FC<VideoPanelProps> = ({
 
       const video = videoRef.current;
       const canvas = canvasRef.current;
-      const ctx = canvas.getContext("2d");
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
 
       if (!ctx) return;
 
       if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const width = 320;
+        const height = 240;
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(video, 0, 0, width, height);
 
-        const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const frame = ctx.getImageData(0, 0, width, height);
         const data = frame.data;
-        let skinPixels = 0;
+        
+        // --- Grid-based Cluster Analysis (Robust Production version) ---
+        const GRID_ROWS = 12;
+        const GRID_COLS = 16;
+        const cellWidth = Math.floor(width / GRID_COLS);
+        const cellHeight = Math.floor(height / GRID_ROWS);
+        const grid = Array(GRID_ROWS).fill(0).map(() => Array(GRID_COLS).fill(0));
+        
+        let totalSkinPixels = 0;
 
-        // Sample every 10th pixel for performance
-        for (let i = 0; i < data.length; i += 40) {
-          const r = data[i];
-          const g = data[i + 1];
-          const b = data[i + 2];
+        // Populate grid with skin pixel counts
+        for (let y = 0; y < height; y += 4) {
+          for (let x = 0; x < width; x += 4) {
+            const index = (y * width + x) * 4;
+            const r = data[index];
+            const g = data[index + 1];
+            const b = data[index + 2];
 
-          // Basic skin color thresholding
-          if (
-            r > 60 &&
-            g > 40 &&
-            b > 20 &&
-            r > g &&
-            r > b &&
-            Math.max(r, g, b) - Math.min(r, g, b) > 15 &&
-            Math.abs(r - g) > 15
-          ) {
-            skinPixels++;
+            // Robust Skin Color Threshold (Compensates for varied lighting)
+            // Rule 1: RGB components separation
+            // Rule 2: Brightness check
+            // Rule 3: Red dominance
+            const isSkin = r > 95 && g > 40 && b > 20 &&
+                           Math.max(r, g, b) - Math.min(r, g, b) > 15 &&
+                           Math.abs(r - g) > 15 && r > g && r > b;
+
+            if (isSkin) {
+              const row = Math.min(Math.floor(y / cellHeight), GRID_ROWS - 1);
+              const col = Math.min(Math.floor(x / cellWidth), GRID_COLS - 1);
+              grid[row][col]++;
+              totalSkinPixels++;
+            }
           }
         }
 
-        // If > 2% of pixels are skin-like, assume face present
-        const totalPixelsCheck = data.length / 40;
-        const isPresent = skinPixels / totalPixelsCheck > 0.02;
+        // --- Connectivity & Blob Identification ---
+        const pixelsPerCell = (cellWidth * cellHeight) / 16;
+        const skinDensityThreshold = pixelsPerCell * 0.12; // 12% skin-dense cells
+        const denseGrid = grid.map(row => row.map(count => count > skinDensityThreshold));
 
-        if (isPresent !== faceDetected) {
-          setFaceDetected(isPresent);
-          onFaceDetectedStatusChange(isPresent);
+        const visited = Array(GRID_ROWS).fill(0).map(() => Array(GRID_COLS).fill(false));
+        const blobs: {size: number, minX: number, maxX: number}[] = [];
+
+        for (let r = 0; r < GRID_ROWS; r++) {
+          for (let c = 0; c < GRID_COLS; c++) {
+            if (denseGrid[r][c] && !visited[r][c]) {
+              let size = 0;
+              let minX = c, maxX = c;
+              const stack = [[r, c]];
+              visited[r][c] = true;
+
+              while (stack.length > 0) {
+                const [currR, currC] = stack.pop()!;
+                size++;
+                minX = Math.min(minX, currC);
+                maxX = Math.max(maxX, currC);
+
+                const neighbors = [[-1, 0],[1, 0],[0, -1],[0, 1],[-1,-1],[-1,1],[1,-1],[1,1]];
+                for (const [dr, dc] of neighbors) {
+                  const nr = currR + dr;
+                  const nc = currC + dc;
+                  if (nr >= 0 && nr < GRID_ROWS && nc >= 0 && nc < GRID_COLS && 
+                      denseGrid[nr][nc] && !visited[nr][nc]) {
+                    visited[nr][nc] = true;
+                    stack.push([nr, nc]);
+                  }
+                }
+              }
+              // Only count blobs that are face-sized (min 5 cells)
+              if (size >= 5) {
+                blobs.push({ size, minX, maxX });
+              }
+            }
+          }
+        }
+
+        // --- Status Determination with Hysteresis (Production Stability) ---
+        
+        // 1. Face Presence Status (Buffer-based)
+        const currentPresence = totalSkinPixels / ((width * height) / 16) > 0.02;
+        faceStateBuffer.current.push(currentPresence);
+        if (faceStateBuffer.current.length > BUFFER_SIZE) faceStateBuffer.current.shift();
+        
+        // Majority vote for stability
+        const smoothedPresence = faceStateBuffer.current.filter(b => b).length >= Math.ceil(BUFFER_SIZE / 2);
+        
+        if (smoothedPresence !== faceDetected) {
+          setFaceDetected(smoothedPresence);
+          onFaceDetectedStatusChange(smoothedPresence);
+        }
+
+        // 2. Multi-Face Status (Buffer-based)
+        // Ensure blobs are distinctly separated (at least 2 grid units apart)
+        const distinctBlobs = blobs.sort((a,b) => a.minX - b.minX).filter((b, i, arr) => {
+          if (i === 0) return true;
+          return (b.minX - arr[i-1].maxX) >= 2; // Min gap of 2 grid cells (~40-50px)
+        });
+
+        const currentMulti = distinctBlobs.length >= 2;
+        multiStateBuffer.current.push(currentMulti);
+        if (multiStateBuffer.current.length > BUFFER_SIZE) multiStateBuffer.current.shift();
+        
+        const smoothedMulti = multiStateBuffer.current.filter(b => b).length >= Math.ceil(BUFFER_SIZE / 2);
+
+        if (smoothedMulti !== multiFaceDetected) {
+          setMultiFaceDetected(smoothedMulti);
+          if (onMultiFaceStatusChange) onMultiFaceStatusChange(smoothedMulti);
         }
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isActive, faceDetected, onFaceDetectedStatusChange]);
+  }, [isActive, faceDetected, multiFaceDetected, onFaceDetectedStatusChange, onMultiFaceStatusChange]);
 
   return (
     <div className="relative w-full h-full bg-black flex items-center justify-center overflow-hidden">
