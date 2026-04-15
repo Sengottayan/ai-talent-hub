@@ -4,17 +4,28 @@ const InterviewResult = require('../models/InterviewResult');
 const Interview = require('../models/Interview');
 
 // Scoring rules for different event types
+// IMPORTANT: All values must be >= 0. Score NEVER decreases.
 const SCORING_RULES = {
-    visibility_hidden: 2,     // Tab switch, minimize, or screen lock
-    window_blur: 1,           // Window lost focus to another app (only fires if tab still visible)
-    mouse_leave: 0,           // Ignored — too noisy, not a reliable signal
-    window_focus: 0,          // Return to window — NOT penalized, just logged
-    mouse_enter: 0,           // Mouse returned — no penalty
-    multi_face_detected: 3,   // High penalty: multiple people visible
-    no_face_detected: 0.5     // Low penalty: candidate stepped away
+    visibility_hidden: 2,     // Tab switch, minimize, screen lock
+    window_blur: 1,           // Window lost focus (different app). Only fires if tab is still visible.
+    window_focus: 0,          // Return to interview — not penalized, just logged
+    mouse_leave: 0,           // Not used (too noisy)
+    mouse_enter: 0,           // Not used
+    multi_face_detected: 3,   // High penalty: multiple people visible in camera
+    no_face_detected: 1,      // Medium penalty: candidate not visible in camera
 };
 
-const MAX_ALLOWED_SCORE = 10; // Auto-terminate threshold (increased from 5 for better UX)
+// Minimum seconds between two events of the same type for the SAME interview+email
+// Server-side deduplication: protects against frontend/reconnect duplicate sends
+const SERVER_SIDE_COOLDOWN_SECS = {
+    visibility_hidden: 2,
+    window_blur: 5,
+    window_focus: 2,
+    multi_face_detected: 15,
+    no_face_detected: 15,
+};
+
+const MAX_ALLOWED_SCORE = 10;
 
 /**
  * @desc    Log and process anti-cheating event
@@ -31,7 +42,8 @@ const logAntiCheatingEvent = async (req, res) => {
             event_type,
             timestamp,
             timestamp_str,
-            durationMs
+            durationMs,
+            faceCount   // For multi_face_detected events
         } = req.body;
 
         if (!interview_id || !email || !event_type) {
@@ -63,16 +75,46 @@ const logAntiCheatingEvent = async (req, res) => {
             }
         }
 
-        // Get the latest event for this interview + candidate
+        // Get the LATEST event of the SAME type for this interview + candidate
+        // (for per-type cooldown deduplication)
+        const latestSameTypeEvent = await AntiCheatingEvent.findOne({
+            interview_id,
+            email: normalizedEmail,
+            event_type
+        }).sort({ createdAt: -1 });
+
+        // Server-side cooldown: reject duplicate events within cooldown window
+        const cooldownSecs = SERVER_SIDE_COOLDOWN_SECS[event_type];
+        if (cooldownSecs && latestSameTypeEvent) {
+            const elapsedSecs = (Date.now() - new Date(latestSameTypeEvent.createdAt).getTime()) / 1000;
+            if (elapsedSecs < cooldownSecs) {
+                console.log(`[ACE] Suppressing duplicate "${event_type}" — fired ${elapsedSecs.toFixed(1)}s ago (cooldown: ${cooldownSecs}s)`);
+                // Return current state without modifying score
+                const latestEvent = await AntiCheatingEvent.findOne({
+                    interview_id,
+                    email: normalizedEmail
+                }).sort({ createdAt: -1 });
+                return res.status(200).json({
+                    suspicious_score: latestEvent?.suspicious_score ?? 0,
+                    max_allowed_score: MAX_ALLOWED_SCORE,
+                    interview_status: latestEvent?.interview_status ?? 'active',
+                    event_type,
+                    score_change: 0,
+                    deduplicated: true
+                });
+            }
+        }
+
+        // Get the latest event for this interview + candidate (for current score)
         const latestEvent = await AntiCheatingEvent.findOne({
             interview_id,
             email: normalizedEmail
         }).sort({ createdAt: -1 });
 
-        // Calculate new score based on event type
-        let currentScore = latestEvent ? latestEvent.suspicious_score : 0;
-        const scoreChange = SCORING_RULES[event_type] || 0;
-        let newScore = Math.max(0, currentScore + scoreChange);
+        // Calculate new score — STRICTLY NON-DECREASING (Math.max prevents any negative change)
+        const currentScore = latestEvent ? latestEvent.suspicious_score : 0;
+        const scoreChange = Math.max(0, SCORING_RULES[event_type] ?? 0); // Never negative
+        const newScore = currentScore + scoreChange; // No Math.max(0,...) needed since scoreChange >= 0
 
         // Check if interview was already auto-completed
         let interviewStatus = latestEvent?.interview_status || 'active';
@@ -162,7 +204,8 @@ const logAntiCheatingEvent = async (req, res) => {
             duration_ms: durationMs || 0,
             suspicious_score: newScore,
             max_allowed_score: MAX_ALLOWED_SCORE,
-            interview_status: interviewStatus
+            interview_status: interviewStatus,
+            ...(faceCount != null && { faceCount })  // Store face count for multi_face_detected events
         });
 
         // Return current state

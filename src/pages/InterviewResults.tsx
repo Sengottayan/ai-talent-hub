@@ -737,7 +737,7 @@ export default function InterviewResults() {
           <ScrollArea className="flex-1 pr-4">
             <div className="space-y-4 py-4">
               {selectedResult?.conversationTranscript &&
-              selectedResult.conversationTranscript.length > 0 ? (
+                selectedResult.conversationTranscript.length > 0 ? (
                 selectedResult.conversationTranscript.map((msg, idx) => (
                   <div
                     key={idx}
@@ -763,11 +763,10 @@ export default function InterviewResults() {
                       </span>
                     </div>
                     <div
-                      className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${
-                        msg.role === "assistant"
+                      className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${msg.role === "assistant"
                           ? "bg-blue-50 text-blue-900 rounded-tl-none border border-blue-100"
                           : "bg-slate-100 text-slate-900 rounded-tr-none border border-slate-200"
-                      }`}
+                        }`}
                     >
                       {msg.content}
                     </div>
@@ -781,9 +780,7 @@ export default function InterviewResults() {
             </div>
           </ScrollArea>
         </DialogContent>
-      </Dialog>
-
-      {/* Violations Modal */}
+      </Dialog>      {/* Violations Modal */}
       <Dialog open={isViolationsOpen} onOpenChange={setIsViolationsOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
           <DialogHeader>
@@ -792,7 +789,7 @@ export default function InterviewResults() {
                 <AlertTriangle className="w-5 h-5 text-amber-600" />
               </div>
               <div>
-                <DialogTitle>Violation & Focus Timeline</DialogTitle>
+                <DialogTitle>Violation &amp; Focus Timeline</DialogTitle>
                 <DialogDescription>
                   Integrity monitoring logs for {selectedResult?.candidate_name}
                 </DialogDescription>
@@ -808,85 +805,154 @@ export default function InterviewResults() {
                   Loading monitoring data...
                 </p>
               </div>
-            ) : violationEvents.length > 0 ? (
-              <div className="relative space-y-4 py-4 before:absolute before:inset-0 before:ml-5 before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-200 before:to-transparent">
-                {violationEvents.map((event, idx) => (
-                  <div
-                    key={idx}
-                    className="relative flex items-center gap-4 pl-10"
-                  >
-                    <div
-                      className={`absolute left-0 w-10 h-10 rounded-full flex items-center justify-center border-4 border-white shadow-sm ${
-                        [
-                          "window_blur",
-                          "visibility_hidden",
-                          "tab_switch",
-                        ].includes(event.event_type)
-                          ? "bg-amber-100"
-                          : "bg-blue-50"
-                      }`}
-                    >
-                      {[
-                        "window_blur",
-                        "visibility_hidden",
-                        "tab_switch",
-                      ].includes(event.event_type) ? (
-                        <AlertTriangle className="w-4 h-4 text-amber-600" />
-                      ) : (
-                        <History className="w-4 h-4 text-blue-600" />
-                      )}
-                    </div>
-                    <div className="flex-1 bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-bold uppercase text-slate-900 tracking-wide">
-                          {event.event_type.replace("_", " ")}
-                        </span>
-                        <span className="text-[10px] font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">
-                          {event.timestamp_str}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-600">
-                        {event.event_type === "window_blur" &&
-                          "Candidate switched to another window or tab."}
-                        {event.event_type === "visibility_hidden" &&
-                          "Interview tab was hidden/minimized."}
-                        {event.event_type === "mouse_leave" &&
-                          "Candidate mouse left the interview area."}
-                        {event.event_type === "window_focus" &&
-                          "Candidate returned to the interview tab."}
-                      </p>
-                      <div className="mt-2 flex items-center gap-2">
-                        <span
-                          className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                            event.suspicious_score >= 8
-                              ? "bg-red-100 text-red-700"
-                              : "bg-amber-100 text-amber-700"
-                          }`}
+            ) : (() => {
+              // Filter out zero-impact log-only events from display
+              const DISPLAY_HIDDEN_EVENTS = ["window_focus", "mouse_enter", "mouse_leave"];
+              const displayEvents = violationEvents.filter(
+                (e) => !DISPLAY_HIDDEN_EVENTS.includes(e.event_type)
+              );
+
+              // Metadata for each event type
+              const EVENT_META: Record<string, {
+                label: string;
+                description: string;
+                severity: "critical" | "warning" | "info";
+              }> = {
+                visibility_hidden: {
+                  label: "Tab Hidden / Minimized",
+                  description: "Interview tab was switched, minimized, or the screen was locked.",
+                  severity: "warning",
+                },
+                window_blur: {
+                  label: "Window Lost Focus",
+                  description: "Interview window lost focus — candidate switched to another application.",
+                  severity: "warning",
+                },
+                multi_face_detected: {
+                  label: "Multiple Faces Detected",
+                  description: "More than one person was detected in the camera frame. This is a serious violation.",
+                  severity: "critical",
+                },
+                no_face_detected: {
+                  label: "Face Not Visible",
+                  description: "Candidate's face was not detected in the camera frame.",
+                  severity: "info",
+                },
+                tab_switch: {
+                  label: "Tab Switch",
+                  description: "Candidate switched away from the interview tab.",
+                  severity: "warning",
+                },
+              };
+
+              const getSeverityStyle = (severity: string) => {
+                switch (severity) {
+                  case "critical": return { dot: "bg-red-500", card: "border-red-100 bg-red-50/40", badge: "bg-red-100 text-red-700", icon: "bg-red-100" };
+                  case "warning": return { dot: "bg-amber-500", card: "border-amber-100 bg-amber-50/40", badge: "bg-amber-100 text-amber-700", icon: "bg-amber-100" };
+                  default: return { dot: "bg-blue-400", card: "border-slate-100 bg-white", badge: "bg-slate-100 text-slate-600", icon: "bg-blue-50" };
+                }
+              };
+
+              return displayEvents.length > 0 ? (
+                <div className="relative space-y-4 py-4 before:absolute before:inset-0 before:ml-5 before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-200 before:to-transparent">
+                  {displayEvents.map((event, idx) => {
+                    const meta = EVENT_META[event.event_type] ?? {
+                      label: event.event_type.replace(/_/g, " ").toUpperCase(),
+                      description: "",
+                      severity: "info",
+                    };
+                    const style = getSeverityStyle(meta.severity);
+                    // Compute score delta from adjacent events
+                    const prevScore = idx > 0 ? displayEvents[idx - 1].suspicious_score : 0;
+                    const scoreDelta = event.suspicious_score - prevScore;
+
+                    return (
+                      <div
+                        key={idx}
+                        className="relative flex items-start gap-4 pl-10"
+                      >
+                        {/* Timeline dot */}
+                        <div
+                          className={`absolute left-0 w-10 h-10 rounded-full flex items-center justify-center border-4 border-white shadow-sm ${style.icon}`}
                         >
-                          Score: {event.suspicious_score} / 10
-                        </span>
-                        {event.duration_ms > 0 && (
-                          <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                            <Clock className="w-2.5 h-2.5" />
-                            {Math.round(event.duration_ms / 1000)}s away
-                          </span>
-                        )}
+                          {meta.severity === "critical" ? (
+                            <AlertTriangle className="w-4 h-4 text-red-600" />
+                          ) : meta.severity === "warning" ? (
+                            <AlertTriangle className="w-4 h-4 text-amber-600" />
+                          ) : (
+                            <History className="w-4 h-4 text-blue-600" />
+                          )}
+                        </div>
+
+                        {/* Event card */}
+                        <div className={`flex-1 p-3 rounded-xl border shadow-sm ${style.card}`}>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-bold uppercase text-slate-900 tracking-wide">
+                              {meta.label}
+                            </span>
+                            <span className="text-[10px] font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">
+                              {event.timestamp_str || "—"}
+                            </span>
+                          </div>
+
+                          {meta.description && (
+                            <p className="text-xs text-slate-600 mb-2">
+                              {meta.description}
+                            </p>
+                          )}
+
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {/* Cumulative score */}
+                            <span
+                              className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${event.suspicious_score >= 8
+                                  ? "bg-red-100 text-red-700"
+                                  : event.suspicious_score >= 5
+                                    ? "bg-amber-100 text-amber-700"
+                                    : "bg-slate-100 text-slate-600"
+                                }`}
+                            >
+                              Score: {event.suspicious_score} / 10
+                            </span>
+
+                            {/* Score delta (only show if > 0) */}
+                            {scoreDelta > 0 && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-red-50 text-red-500 border border-red-100">
+                                +{scoreDelta} pts
+                              </span>
+                            )}
+
+                            {/* Duration away (for tab-switch events) */}
+                            {event.duration_ms > 0 && (
+                              <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                                <Clock className="w-2.5 h-2.5" />
+                                {Math.round(event.duration_ms / 1000)}s away
+                              </span>
+                            )}
+
+                            {/* Face count (for multi-face events) */}
+                            {event.faceCount > 0 && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-red-50 text-red-500 border border-red-100">
+                                {event.faceCount} faces
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-20 bg-slate-50 rounded-2xl border border-dashed border-slate-200 mt-4">
-                <CheckCircle className="w-10 h-10 text-green-500 mx-auto mb-3 opacity-20" />
-                <p className="text-sm font-medium text-slate-900">
-                  Perfect Focus!
-                </p>
-                <p className="text-xs text-slate-500 mt-1">
-                  No violations or focus loss detected for this session.
-                </p>
-              </div>
-            )}
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-20 bg-slate-50 rounded-2xl border border-dashed border-slate-200 mt-4">
+                  <CheckCircle className="w-10 h-10 text-green-500 mx-auto mb-3 opacity-20" />
+                  <p className="text-sm font-medium text-slate-900">
+                    Perfect Focus!
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    No violations or focus loss detected for this session.
+                  </p>
+                </div>
+              );
+            })()}
           </ScrollArea>
         </DialogContent>
       </Dialog>
