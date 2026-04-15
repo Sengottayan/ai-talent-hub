@@ -61,9 +61,18 @@ export const VideoPanel: React.FC<VideoPanelProps> = ({
     };
   }, []);
 
+  // Use refs for detection state inside the interval to avoid stale closures
+  // and prevent the interval from being recreated every time detection state changes.
+  const faceDetectedRef = useRef(true);
+  const multiFaceDetectedRef = useRef(false);
+
   // Enhanced Detection Cycle
   useEffect(() => {
     if (!isActive) return;
+
+    // Reset buffers when detection starts
+    faceStateBuffer.current = [];
+    multiStateBuffer.current = [];
 
     const interval = setInterval(() => {
       if (!videoRef.current || !canvasRef.current) return;
@@ -93,7 +102,6 @@ export const VideoPanel: React.FC<VideoPanelProps> = ({
         
         let totalSkinPixels = 0;
 
-        // Populate grid with skin pixel counts
         for (let y = 0; y < height; y += 4) {
           for (let x = 0; x < width; x += 4) {
             const index = (y * width + x) * 4;
@@ -101,10 +109,6 @@ export const VideoPanel: React.FC<VideoPanelProps> = ({
             const g = data[index + 1];
             const b = data[index + 2];
 
-            // Robust Skin Color Threshold (Compensates for varied lighting)
-            // Rule 1: RGB components separation
-            // Rule 2: Brightness check
-            // Rule 3: Red dominance
             const isSkin = r > 95 && g > 40 && b > 20 &&
                            Math.max(r, g, b) - Math.min(r, g, b) > 15 &&
                            Math.abs(r - g) > 15 && r > g && r > b;
@@ -120,7 +124,7 @@ export const VideoPanel: React.FC<VideoPanelProps> = ({
 
         // --- Connectivity & Blob Identification ---
         const pixelsPerCell = (cellWidth * cellHeight) / 16;
-        const skinDensityThreshold = pixelsPerCell * 0.12; // 12% skin-dense cells
+        const skinDensityThreshold = pixelsPerCell * 0.12;
         const denseGrid = grid.map(row => row.map(count => count > skinDensityThreshold));
 
         const visited = Array(GRID_ROWS).fill(0).map(() => Array(GRID_COLS).fill(false));
@@ -151,7 +155,6 @@ export const VideoPanel: React.FC<VideoPanelProps> = ({
                   }
                 }
               }
-              // Only count blobs that are face-sized (min 5 cells)
               if (size >= 5) {
                 blobs.push({ size, minX, maxX });
               }
@@ -159,35 +162,37 @@ export const VideoPanel: React.FC<VideoPanelProps> = ({
           }
         }
 
-        // --- Status Determination with Hysteresis (Production Stability) ---
+        // --- Status Determination with Hysteresis ---
         
-        // 1. Face Presence Status (Buffer-based)
+        // 1. Face Presence (Buffer-based, reads/writes ref to avoid stale closure)
         const currentPresence = totalSkinPixels / ((width * height) / 16) > 0.02;
         faceStateBuffer.current.push(currentPresence);
         if (faceStateBuffer.current.length > BUFFER_SIZE) faceStateBuffer.current.shift();
         
-        // Majority vote for stability
-        const smoothedPresence = faceStateBuffer.current.filter(b => b).length >= Math.ceil(BUFFER_SIZE / 2);
+        const smoothedPresence = faceStateBuffer.current.filter(Boolean).length >= Math.ceil(BUFFER_SIZE / 2);
         
-        if (smoothedPresence !== faceDetected) {
+        // Only update state (and fire callback) when value actually changes
+        if (smoothedPresence !== faceDetectedRef.current) {
+          faceDetectedRef.current = smoothedPresence;
           setFaceDetected(smoothedPresence);
           onFaceDetectedStatusChange(smoothedPresence);
         }
 
         // 2. Multi-Face Status (Buffer-based)
-        // Ensure blobs are distinctly separated (at least 2 grid units apart)
-        const distinctBlobs = blobs.sort((a,b) => a.minX - b.minX).filter((b, i, arr) => {
+        const distinctBlobs = blobs.sort((a, b) => a.minX - b.minX).filter((b, i, arr) => {
           if (i === 0) return true;
-          return (b.minX - arr[i-1].maxX) >= 2; // Min gap of 2 grid cells (~40-50px)
+          return (b.minX - arr[i-1].maxX) >= 2;
         });
 
         const currentMulti = distinctBlobs.length >= 2;
         multiStateBuffer.current.push(currentMulti);
         if (multiStateBuffer.current.length > BUFFER_SIZE) multiStateBuffer.current.shift();
         
-        const smoothedMulti = multiStateBuffer.current.filter(b => b).length >= Math.ceil(BUFFER_SIZE / 2);
+        const smoothedMulti = multiStateBuffer.current.filter(Boolean).length >= Math.ceil(BUFFER_SIZE / 2);
 
-        if (smoothedMulti !== multiFaceDetected) {
+        // Only update state (and fire callback) when value actually changes
+        if (smoothedMulti !== multiFaceDetectedRef.current) {
+          multiFaceDetectedRef.current = smoothedMulti;
           setMultiFaceDetected(smoothedMulti);
           if (onMultiFaceStatusChange) onMultiFaceStatusChange(smoothedMulti);
         }
@@ -195,7 +200,9 @@ export const VideoPanel: React.FC<VideoPanelProps> = ({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isActive, faceDetected, multiFaceDetected, onFaceDetectedStatusChange, onMultiFaceStatusChange]);
+    // Only depend on isActive and the stable callback refs — NOT on the detection states
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive]);
 
   return (
     <div className="relative w-full h-full bg-black flex items-center justify-center overflow-hidden">

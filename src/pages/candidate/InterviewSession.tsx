@@ -70,6 +70,10 @@ export default function InterviewSession() {
   const [multiFaceCount, setMultiFaceCount] = useState(0);
   const [noFaceCount, setNoFaceCount] = useState(0);
 
+  // Refs to track previous detection state (avoid repeated triggers on sustained detection)
+  const prevMultiFaceRef = useRef(false);
+  const noFaceCountRef = useRef(0);
+
   // Transcript State
   const [currentTranscript, setCurrentTranscript] = useState("");
   const [transcriptHistory, setTranscriptHistory] = useState<
@@ -253,9 +257,10 @@ export default function InterviewSession() {
   const handleFaceStatus = useCallback(
     (isDetected: boolean) => {
       if (!isDetected && sessionState === "interview") {
-        setNoFaceCount(prev => prev + 1);
-        // Only log to violations array every few seconds to avoid flood
-        if (noFaceCount % 10 === 0) {
+        noFaceCountRef.current += 1;
+        setNoFaceCount(noFaceCountRef.current);
+        // Only log to violations array every 10 events to avoid flood
+        if (noFaceCountRef.current % 10 === 0) {
            handleViolation("no_face_detected", "Candidate's face is not visible in camera.");
            toast({
             title: "Face Not Detected",
@@ -265,12 +270,15 @@ export default function InterviewSession() {
         }
       }
     },
-    [handleViolation, sessionState, noFaceCount],
+    [handleViolation, sessionState],
   );
 
   const handleMultiFaceStatus = useCallback(
     (isMulti: boolean) => {
-      if (isMulti && sessionState === "interview") {
+      // Only trigger on the RISING EDGE (first frame multi-face becomes true)
+      // VideoPanel already smooths this so we trust the value
+      if (isMulti && !prevMultiFaceRef.current && sessionState === "interview") {
+        prevMultiFaceRef.current = true;
         setMultiFaceCount(prev => prev + 1);
         handleViolation("multi_face_detected", "Multiple people detected in frame.");
         toast({
@@ -278,6 +286,9 @@ export default function InterviewSession() {
           description: "Multiple people detected. This is being recorded.",
           variant: "destructive",
         });
+      } else if (!isMulti) {
+        // Reset edge-tracking when multi-face clears
+        prevMultiFaceRef.current = false;
       }
     },
     [handleViolation, sessionState],

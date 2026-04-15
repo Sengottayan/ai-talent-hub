@@ -667,6 +667,7 @@ export default function CandidateInterviewStart() {
           isInteractionActive={
             isSpeaking || interviewInfo.interviewType === "Problem Solving"
           }
+          videoRef={videoRef}
         />
       )}
       <div className="container mx-auto px-4 py-8 max-w-7xl">

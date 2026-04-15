@@ -5,13 +5,13 @@ const Interview = require('../models/Interview');
 
 // Scoring rules for different event types
 const SCORING_RULES = {
-    visibility_hidden: 2, // Tab switch or minimize
-    window_blur: 1.5,     // Window lost focus
-    mouse_leave: 0.5,     // Mouse left window (less severe)
-    window_focus: -0.5,   // Returned to window (slight recovery)
-    mouse_enter: 0,        // Mouse returned (no penalty)
-    multi_face_detected: 3.0, // High penalty for multiple people
-    no_face_detected: 0.5    // Low penalty for empty frame
+    visibility_hidden: 2,     // Tab switch, minimize, or screen lock
+    window_blur: 1,           // Window lost focus to another app (only fires if tab still visible)
+    mouse_leave: 0,           // Ignored — too noisy, not a reliable signal
+    window_focus: 0,          // Return to window — NOT penalized, just logged
+    mouse_enter: 0,           // Mouse returned — no penalty
+    multi_face_detected: 3,   // High penalty: multiple people visible
+    no_face_detected: 0.5     // Low penalty: candidate stepped away
 };
 
 const MAX_ALLOWED_SCORE = 10; // Auto-terminate threshold (increased from 5 for better UX)
