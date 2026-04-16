@@ -14,7 +14,7 @@ interface AntiCheatingMonitorProps {
   candidateName: string;
   onViolationLimitReached?: () => void;
   isCompleted?: boolean;
-  isInteractionActive?: boolean;
+  isInteractionActive?: boolean; // When AI is speaking or candidate is focused on coding
   videoRef?: React.RefObject<HTMLVideoElement>;
 }
 
@@ -22,14 +22,14 @@ type FaceApiModule = typeof import("face-api.js");
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const GRACE_PERIOD_MS = 8000;          
-const FACE_CHECK_INTERVAL_MS = 1800;   // Balanced interval (1.8s)
-const FACE_EVENT_COOLDOWN_MS = 20000;  
+const FACE_CHECK_INTERVAL_MS = 1600;   // Slightly faster checks (1.6s)
+const FACE_EVENT_COOLDOWN_MS = 15000;  // 15s between violation events
 const BLUR_DEDUP_DELAY_MS = 350;
 const WINDOW_BLUR_COOLDOWN_MS = 5000;
 
-// Accumulator thresholds (Robustness)
-const MULTI_FACE_THRESHOLD = 2; // Reduced threshold for more sensitivity
-const NO_FACE_THRESHOLD = 4;    
+// Detection Buffer (Moving average / Sliding window)
+// We look at the last N frames to determine the core state.
+const DETECTION_BUFFER_SIZE = 5;
 
 // face-api.js singleton promise
 let faceApiLoadPromise: Promise<FaceApiModule | null> | null = null;
@@ -67,34 +67,30 @@ async function detectFaceCount(
     try {
       const faces = await nativeDetector.detect(video);
       return faces.length;
-    } catch (err) {
-      // If native fails, fallback to face-api immediately
-    }
+    } catch (err) {}
   }
 
-  // Priority 2: face-api.js SSD Mobilenet v1 (High accuracy, handles background faces)
+  // Priority 2: face-api.js SSD Mobilenet v1 (High accuracy)
   if (faceapi && faceapi.nets.ssdMobilenetv1.params) {
     try {
       const detections = await faceapi.detectAllFaces(
         video,
         new faceapi.SsdMobilenetv1Options({
-          minConfidence: 0.35, // Very sensitive, will count background people
+          minConfidence: 0.30, // Highly sensitive for production robustness
           maxResults: 5
         })
       );
       return detections.length;
-    } catch (err) {
-      // If SSD fails, try Tiny as last resort
-    }
+    } catch (err) {}
   }
 
-  // Fallback: face-api.js TinyFaceDetector (Fast, light)
+  // Fallback: face-api.js TinyFaceDetector
   if (faceapi && faceapi.nets.tinyFaceDetector.params) {
     try {
       const detections = await faceapi.detectAllFaces(
         video,
         new faceapi.TinyFaceDetectorOptions({
-          inputSize: 416,        // Max resolution for Tiny to see small faces
+          inputSize: 416,
           scoreThreshold: 0.4
         })
       );
@@ -120,10 +116,9 @@ const AntiCheatingMonitor: React.FC<AntiCheatingMonitorProps> = ({
   const visibilityHiddenAtRef = useRef<number>(0);
   const startBlurTimeRef = useRef<number | null>(null);
   
-  const multiFaceScoreRef = useRef(0);
-  const noFaceScoreRef = useRef(0);
+  // High-accuracy sliding window
+  const faceHistoryRef = useRef<number[]>([]);
   const lastScoreLogRef = useRef(-1);
-
   const lastEventTimeRef = useRef<Record<string, number>>({});
 
   const sendEvent = async (eventType: string, extraData: Record<string, unknown> = {}) => {
@@ -144,6 +139,14 @@ const AntiCheatingMonitor: React.FC<AntiCheatingMonitorProps> = ({
     if (now - lastFired < cooldown) return;
     lastEventTimeRef.current[eventType] = now;
 
+    // Show warning IMMEDIATELY to candidate
+    const warningMsg = getWarningMessage(eventType);
+    toast.error(`⚠️ Security Warning: ${warningMsg}`, { 
+      id: `ac-${eventType}`, 
+      duration: 6000,
+      description: "This event has been recorded in the integrity log."
+    });
+
     try {
       const { data } = await api.post(`/interviews/anti-cheating-event`, {
         interview_id: interviewId,
@@ -157,14 +160,8 @@ const AntiCheatingMonitor: React.FC<AntiCheatingMonitorProps> = ({
       });
 
       if (data.interview_status === "auto_completed") {
-        toast.error("Violation limit reached. Interview ended.");
+        toast.error("Critical: Multiple integrity violations detected. Interview terminated.", { duration: 10000 });
         onViolationLimitReached?.();
-      } else {
-        const score = data.suspicious_score ?? 0;
-        const max = data.max_allowed_score ?? 10;
-        if (score > 0 && (score >= 5 || eventType.includes("face"))) {
-          toast.warning(`Suspicious activity (${score}/${max}): ${getWarningMessage(eventType)}`, { id: "ac-warn", duration: 5000 });
-        }
       }
     } catch (err) {
       console.error("[ACM] Event push failed:", err);
@@ -173,10 +170,11 @@ const AntiCheatingMonitor: React.FC<AntiCheatingMonitorProps> = ({
 
   const getWarningMessage = (eventType: string) => {
     switch (eventType) {
-      case "multi_face_detected": return "Multiple faces detected in camera.";
-      case "no_face_detected": return "Candidate face not visible.";
-      case "visibility_hidden": return "Keep interview tab active.";
-      default: return "Focus on the screen.";
+      case "multi_face_detected": return "Multiple people detected. Ensure you are alone.";
+      case "no_face_detected": return "Face not visible. Please stay in front of the camera.";
+      case "visibility_hidden": return "Tab switched or minimized.";
+      case "window_blur": return "Window lost focus.";
+      default: return "Integrity check failed.";
     }
   };
 
@@ -189,7 +187,7 @@ const AntiCheatingMonitor: React.FC<AntiCheatingMonitorProps> = ({
     } catch { return "00:00"; }
   };
 
-  // ─── Standard Events ──────────────────────────────────────────────────────
+  // ─── Browser Events ───────────────────────────────────────────────────────
   useEffect(() => {
     if (!interviewId || isCompleted) return;
     const handleBeforeUnload = () => { isUnloadingRef.current = true; };
@@ -231,7 +229,7 @@ const AntiCheatingMonitor: React.FC<AntiCheatingMonitorProps> = ({
     };
   }, [interviewId, isCompleted]);
 
-  // ─── Production Face Detection (SSD Mobilenet v1) ───────────────────────────
+  // ─── Face Detection Loop ──────────────────────────────────────────────────
   useEffect(() => {
     if (!videoRef || isCompleted) return;
     let intervalId: any = null;
@@ -251,7 +249,7 @@ const AntiCheatingMonitor: React.FC<AntiCheatingMonitorProps> = ({
       faceapiModule = await loadFaceApiModel();
       if (!faceapiModule && !nativeDetector && isMounted) return;
 
-      // wait for video
+      // sync video readiness
       await new Promise<void>((resolve) => {
         const check = setInterval(() => {
           const v = videoRef.current;
@@ -264,7 +262,7 @@ const AntiCheatingMonitor: React.FC<AntiCheatingMonitorProps> = ({
       });
 
       if (!isMounted) return;
-      console.log("[ACM] 🎥 Starting high-accuracy detection loop...");
+      console.log("[ACM] 🔍 Integrity monitoring active.");
 
       intervalId = setInterval(async () => {
         if (!isMounted || isCompleted || isUnloadingRef.current) return;
@@ -273,30 +271,38 @@ const AntiCheatingMonitor: React.FC<AntiCheatingMonitorProps> = ({
 
         const count = await detectFaceCount(video, faceapiModule, nativeDetector);
         
-        // Log changes in detection for better production monitoring
-        if (count >= 0 && count !== lastScoreLogRef.current) {
-          console.log(`[ACM] Detected Faces: ${count}`);
-          lastScoreLogRef.current = count;
-        }
-
-        if (count >= 2) {
-          multiFaceScoreRef.current += 1;
-          noFaceScoreRef.current = 0;
-          if (multiFaceScoreRef.current >= MULTI_FACE_THRESHOLD) {
-            multiFaceScoreRef.current = 0;
-             await sendEvent("multi_face_detected", { faceCount: count });
+        if (count >= 0) {
+          // Log changes in detection for better production monitoring
+          if (count !== lastScoreLogRef.current) {
+            console.log(`[ACM] Detected Faces: ${count}`);
+            lastScoreLogRef.current = count;
           }
-        } else if (count === 0) {
-          noFaceScoreRef.current += 1;
-          multiFaceScoreRef.current = Math.max(0, multiFaceScoreRef.current - 1);
-          if (noFaceScoreRef.current >= NO_FACE_THRESHOLD) {
-            noFaceScoreRef.current = 0;
+
+          // Maintain sliding window buffer
+          faceHistoryRef.current.push(count);
+          if (faceHistoryRef.current.length > DETECTION_BUFFER_SIZE) {
+            faceHistoryRef.current.shift();
+          }
+
+          // Evaluate integrity based on the buffer
+          const buffer = faceHistoryRef.current;
+          if (buffer.length < 3) return; // Wait for buffer to prime
+
+          // Integrity Check 1: Multiple Faces
+          // If 2+ faces appear in at least 40% (2 out of 5) of the recent checks
+          const multiFaceFrames = buffer.filter(c => c >= 2).length;
+          if (multiFaceFrames >= 2) {
+            faceHistoryRef.current = []; // Clear buffer to prevent spamming
+            await sendEvent("multi_face_detected", { faceCount: count });
+          }
+
+          // Integrity Check 2: No Face
+          // If 0 faces appear in 80% (4 out of 5) of the recent checks
+          const noFaceFrames = buffer.filter(c => c === 0).length;
+          if (noFaceFrames >= 4) {
+            faceHistoryRef.current = []; // Clear buffer to prevent spamming
             await sendEvent("no_face_detected");
           }
-        } else {
-          // Count = 1, regular state
-          multiFaceScoreRef.current = Math.max(0, multiFaceScoreRef.current - 1);
-          noFaceScoreRef.current = 0;
         }
       }, FACE_CHECK_INTERVAL_MS);
     };
