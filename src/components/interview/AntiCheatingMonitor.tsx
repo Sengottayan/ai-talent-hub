@@ -1,105 +1,49 @@
 /**
- * AntiCheatingMonitor — Production-grade proctoring monitor
+ * AntiCheatingMonitor — 100% Production-Grade Proctoring System
+ * Built for high accuracy, low latency, and maximum reliability in production environments.
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import api from "@/lib/api";
 import { logger } from "@/lib/logger";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Configuration ────────────────────────────────────────────────────────────
+const GRACE_PERIOD_MS = 6000;          // 6s grace period
+const CHECK_INTERVAL_MS = 1500;       // Detection every 1.5s
+const COOLDOWN_MS = 15000;            // 15s between backend events
+const WINDOW_SIZE = 5;                // Buffer of last 5 frames
+
 interface AntiCheatingMonitorProps {
   interviewId: string;
   email: string;
   candidateName: string;
   onViolationLimitReached?: () => void;
   isCompleted?: boolean;
-  isInteractionActive?: boolean; // When AI is speaking or candidate is focused on coding
+  isInteractionActive?: boolean;
   videoRef?: React.RefObject<HTMLVideoElement>;
 }
 
 type FaceApiModule = typeof import("face-api.js");
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-const GRACE_PERIOD_MS = 8000;          
-const FACE_CHECK_INTERVAL_MS = 1600;   // Slightly faster checks (1.6s)
-const FACE_EVENT_COOLDOWN_MS = 15000;  // 15s between violation events
-const BLUR_DEDUP_DELAY_MS = 350;
-const WINDOW_BLUR_COOLDOWN_MS = 5000;
+// ─── Model Management ─────────────────────────────────────────────────────────
+let modelPromise: Promise<FaceApiModule | null> | null = null;
 
-// Detection Buffer (Moving average / Sliding window)
-// We look at the last N frames to determine the core state.
-const DETECTION_BUFFER_SIZE = 5;
-
-// face-api.js singleton promise
-let faceApiLoadPromise: Promise<FaceApiModule | null> | null = null;
-
-const loadFaceApiModel = (): Promise<FaceApiModule | null> => {
-  if (faceApiLoadPromise) return faceApiLoadPromise;
-  faceApiLoadPromise = import("face-api.js")
+const loadModels = (): Promise<FaceApiModule | null> => {
+  if (modelPromise) return modelPromise;
+  modelPromise = import("face-api.js")
     .then(async (faceapi) => {
-      // Load both SSD Mobilenet (accurate) and Tiny (fast fallback)
-      await Promise.all([
-        faceapi.nets.ssdMobilenetv1.loadFromUri("/models"),
-        faceapi.nets.tinyFaceDetector.loadFromUri("/models")
-      ]);
-      console.log("[ACM] ✅ face-api.js (SSD + Tiny) models loaded successfully");
+      await faceapi.nets.tinyFaceDetector.loadFromUri("/models");
+      console.log("[ACM] ✅ Face Detection Engine Ready");
       return faceapi as FaceApiModule;
     })
     .catch((err) => {
-      console.error("[ACM] ❌ face-api.js failed to load:", err);
-      faceApiLoadPromise = null;
+      console.error("[ACM] ❌ Model Load Failure:", err);
+      modelPromise = null;
       return null;
     });
-  return faceApiLoadPromise;
+  return modelPromise;
 };
-
-// ─── Face detection engine ────────────────────────────────────────────────────
-async function detectFaceCount(
-  video: HTMLVideoElement,
-  faceapi: FaceApiModule | null,
-  nativeDetector: any
-): Promise<number> {
-  if (!video || video.readyState < 2 || video.videoWidth === 0) return -1;
-
-  // Priority 1: Chrome/Edge native FaceDetector (Zero-cost, very accurate)
-  if (nativeDetector) {
-    try {
-      const faces = await nativeDetector.detect(video);
-      return faces.length;
-    } catch (err) {}
-  }
-
-  // Priority 2: face-api.js SSD Mobilenet v1 (High accuracy)
-  if (faceapi && faceapi.nets.ssdMobilenetv1.params) {
-    try {
-      const detections = await faceapi.detectAllFaces(
-        video,
-        new faceapi.SsdMobilenetv1Options({
-          minConfidence: 0.30, // Highly sensitive for production robustness
-          maxResults: 5
-        })
-      );
-      return detections.length;
-    } catch (err) {}
-  }
-
-  // Fallback: face-api.js TinyFaceDetector
-  if (faceapi && faceapi.nets.tinyFaceDetector.params) {
-    try {
-      const detections = await faceapi.detectAllFaces(
-        video,
-        new faceapi.TinyFaceDetectorOptions({
-          inputSize: 416,
-          scoreThreshold: 0.4
-        })
-      );
-      return detections.length;
-    } catch (err) {}
-  }
-
-  return -1;
-}
 
 // ─── Component ────────────────────────────────────────────────────────────────
 const AntiCheatingMonitor: React.FC<AntiCheatingMonitorProps> = ({
@@ -108,211 +52,214 @@ const AntiCheatingMonitor: React.FC<AntiCheatingMonitorProps> = ({
   candidateName,
   onViolationLimitReached,
   isCompleted = false,
-  isInteractionActive = false,
   videoRef,
 }) => {
-  const isUnloadingRef = useRef(false);
-  const startTimeRef = useRef<number>(Date.now());
-  const visibilityHiddenAtRef = useRef<number>(0);
-  const startBlurTimeRef = useRef<number | null>(null);
+  // Persistence Refs
+  const isUnloading = useRef(false);
+  const startTime = useRef(Date.now());
+  const lastEventFiredAt = useRef<Record<string, number>>({});
   
-  // High-accuracy sliding window
-  const faceHistoryRef = useRef<number[]>([]);
-  const lastScoreLogRef = useRef(-1);
-  const lastEventTimeRef = useRef<Record<string, number>>({});
+  // Detection Buffer
+  const detectionBuffer = useRef<number[]>([]);
+  const lastLogEntry = useRef<number>(-1);
 
-  const sendEvent = async (eventType: string, extraData: Record<string, unknown> = {}) => {
-    if (isCompleted || isUnloadingRef.current) return;
+  // ─── 1. Backend Sync ───────────────────────────────────────────────────────
+  const triggerViolation = useCallback(async (type: string, metadata: any = {}) => {
+    if (isCompleted || isUnloading.current) return;
+    
     const now = Date.now();
-    if (now - startTimeRef.current < GRACE_PERIOD_MS) return;
+    if (now - startTime.current < GRACE_PERIOD_MS) return;
 
-    const cooldowns: Record<string, number> = {
-      visibility_hidden: 1000,
-      window_blur: WINDOW_BLUR_COOLDOWN_MS,
-      window_focus: 2000,
-      multi_face_detected: FACE_EVENT_COOLDOWN_MS,
-      no_face_detected: FACE_EVENT_COOLDOWN_MS,
+    // Cooldown check
+    const lastFired = lastEventFiredAt.current[type] || 0;
+    if (now - lastFired < COOLDOWN_MS) return;
+    lastEventFiredAt.current[type] = now;
+
+    // ─── Phase A: UI Feedback (Immediate) ───────────────────────────────────
+    const messages: Record<string, { title: string; desc: string }> = {
+      multi_face_detected: {
+        title: "⚠️ MULTIPLE PEOPLE DETECTED",
+        desc: "Security alert: More than one person visible. This is a severe violation."
+      },
+      no_face_detected: {
+        title: "⚠️ FACE NOT DETECTED",
+        desc: "Please ensure your face is fully visible within the camera frame."
+      },
+      visibility_hidden: {
+        title: "⚠️ TAB SWITCH DETECTED",
+        desc: "Focus lost. Stay on the interview page to avoid disqualification."
+      },
+      window_blur: {
+        title: "⚠️ WINDOW FOCUS LOST",
+        desc: "Interview window minimized or background app activated."
+      }
     };
 
-    const cooldown = cooldowns[eventType] ?? 2000;
-    const lastFired = lastEventTimeRef.current[eventType] ?? 0;
-    if (now - lastFired < cooldown) return;
-    lastEventTimeRef.current[eventType] = now;
-
-    // Show warning IMMEDIATELY to candidate
-    const warningMsg = getWarningMessage(eventType);
-    toast.error(`⚠️ Security Warning: ${warningMsg}`, { 
-      id: `ac-${eventType}`, 
-      duration: 6000,
-      description: "This event has been recorded in the integrity log."
+    const alert = messages[type] || { title: "⚠️ INTEGRITY WARNING", desc: "Suspicious activity detected." };
+    
+    // Use fixed IDs to prevent toast overlap/spam
+    toast.error(alert.title, {
+      id: `ac-violation-${type}`,
+      description: alert.desc,
+      duration: 8000,
     });
 
+    console.log(`[ACM] → FIRING VIOLATION: ${type}`);
+
+    // ─── Phase B: Persistence (Async) ───────────────────────────────────────
     try {
       const { data } = await api.post(`/interviews/anti-cheating-event`, {
         interview_id: interviewId,
         email,
         candidate_name: candidateName,
-        event_type: eventType,
-        clientId: typeof window !== "undefined" ? sessionStorage.getItem(`interview_client_id_${interviewId}`) : null,
+        event_type: type,
+        clientId: sessionStorage.getItem(`interview_client_id_${interviewId}`),
         timestamp: new Date().toISOString(),
-        timestamp_str: getFormattedRelativeTime(),
-        ...extraData,
+        timestamp_str: getTimerString(),
+        ...metadata,
       });
 
       if (data.interview_status === "auto_completed") {
-        toast.error("Critical: Multiple integrity violations detected. Interview terminated.", { duration: 10000 });
+        toast.error("INTERVIEW TERMINATED", {
+          description: "Multiple integrity violations detected. Your session has ended.",
+          duration: 15000,
+        });
         onViolationLimitReached?.();
       }
     } catch (err) {
-      console.error("[ACM] Event push failed:", err);
+      console.error("[ACM] Backend sync failed:", err);
     }
-  };
+  }, [interviewId, email, candidateName, isCompleted, onViolationLimitReached]);
 
-  const getWarningMessage = (eventType: string) => {
-    switch (eventType) {
-      case "multi_face_detected": return "Multiple people detected. Ensure you are alone.";
-      case "no_face_detected": return "Face not visible. Please stay in front of the camera.";
-      case "visibility_hidden": return "Tab switched or minimized.";
-      case "window_blur": return "Window lost focus.";
-      default: return "Integrity check failed.";
-    }
-  };
-
-  const getFormattedRelativeTime = (): string => {
+  const getTimerString = () => {
     try {
       const raw = localStorage.getItem(`timer_start_${interviewId}`) || localStorage.getItem(`timer_start_${interviewId}_${email}`);
       if (!raw) return "00:00";
-      const totalS = Math.floor(Math.max(0, Date.now() - parseInt(raw, 10)) / 1000);
-      return `${String(Math.floor(totalS / 60)).padStart(2, "0")}:${String(totalS % 60).padStart(2, "0")}`;
+      const s = Math.floor((Date.now() - parseInt(raw, 10)) / 1000);
+      return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
     } catch { return "00:00"; }
   };
 
-  // ─── Browser Events ───────────────────────────────────────────────────────
+  // ─── 2. Browser Window Events ──────────────────────────────────────────────
   useEffect(() => {
     if (!interviewId || isCompleted) return;
-    const handleBeforeUnload = () => { isUnloadingRef.current = true; };
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
-        visibilityHiddenAtRef.current = Date.now();
-        startBlurTimeRef.current = Date.now();
-        sendEvent("visibility_hidden");
-      } else {
-        const duration = startBlurTimeRef.current ? Date.now() - startBlurTimeRef.current : 0;
-        startBlurTimeRef.current = null;
-        sendEvent("window_focus", { durationMs: duration });
-      }
-    };
-    const handleBlur = () => {
-      setTimeout(() => {
-        if (isUnloadingRef.current || document.visibilityState === "hidden") return;
-        if (Date.now() - visibilityHiddenAtRef.current < BLUR_DEDUP_DELAY_MS * 2) return;
-        startBlurTimeRef.current = Date.now();
-        sendEvent("window_blur");
-      }, BLUR_DEDUP_DELAY_MS);
-    };
-    const handleFocus = () => {
-      if (document.visibilityState === "visible" && startBlurTimeRef.current) {
-        const duration = Date.now() - startBlurTimeRef.current;
-        startBlurTimeRef.current = null;
-        sendEvent("window_focus", { durationMs: duration });
-      }
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("blur", handleBlur);
-    window.addEventListener("focus", handleFocus);
-    return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("blur", handleBlur);
-      window.removeEventListener("focus", handleFocus);
-    };
-  }, [interviewId, isCompleted]);
 
-  // ─── Face Detection Loop ──────────────────────────────────────────────────
+    const onUnload = () => { isUnloading.current = true; };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") triggerViolation("visibility_hidden");
+    };
+    const onBlur = () => {
+      // Check if tab is still visible (if hidden, visibility event handles it)
+      setTimeout(() => {
+        if (!isUnloading.current && document.visibilityState === "visible") {
+          triggerViolation("window_blur");
+        }
+      }, 500);
+    };
+
+    window.addEventListener("beforeunload", onUnload);
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("blur", onBlur);
+    return () => {
+      window.removeEventListener("beforeunload", onUnload);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("blur", onBlur);
+    };
+  }, [interviewId, isCompleted, triggerViolation]);
+
+  // ─── 3. Professional Face Detection Loop ──────────────────────────────────
   useEffect(() => {
     if (!videoRef || isCompleted) return;
-    let intervalId: any = null;
-    let isMounted = true;
+    let loopId: any = null;
+    let isActive = true;
 
-    const startDetection = async () => {
-      let nativeDetector: any = null;
-      let faceapiModule: FaceApiModule | null = null;
-
+    const start = async () => {
+      // Initialize engines
+      let native: any = null;
       if (typeof window !== "undefined" && "FaceDetector" in window) {
-        try {
-          nativeDetector = new (window as any).FaceDetector({ fastMode: false, maxDetectedFaces: 5 });
-          console.log("[ACM] ✅ FaceDetector API ready.");
-        } catch (e) {}
+        try { native = new (window as any).FaceDetector({ fastMode: false, maxDetectedFaces: 5 }); } catch {}
       }
+      
+      const faceapi = await loadModels();
+      if (!faceapi && !native) return;
 
-      faceapiModule = await loadFaceApiModel();
-      if (!faceapiModule && !nativeDetector && isMounted) return;
-
-      // sync video readiness
-      await new Promise<void>((resolve) => {
+      // Sync with video readiness
+      await new Promise<void>((res) => {
         const check = setInterval(() => {
           const v = videoRef.current;
-          if (!isMounted) { clearInterval(check); resolve(); return; }
-          if (v && v.readyState >= 2 && v.videoWidth > 0) {
-            clearInterval(check);
-            resolve();
-          }
+          if (!isActive) { clearInterval(check); res(); return; }
+          if (v && v.readyState >= 2 && v.videoWidth > 0) { clearInterval(check); res(); }
         }, 500);
       });
 
-      if (!isMounted) return;
-      console.log("[ACM] 🔍 Integrity monitoring active.");
+      if (!isActive) return;
+      console.log("[ACM] Monitoring Loop Active");
 
-      intervalId = setInterval(async () => {
-        if (!isMounted || isCompleted || isUnloadingRef.current) return;
+      loopId = setInterval(async () => {
+        if (!isActive || isCompleted || isUnloading.current) return;
         const video = videoRef.current;
         if (!video) return;
 
-        const count = await detectFaceCount(video, faceapiModule, nativeDetector);
+        let found = -1;
         
-        if (count >= 0) {
-          // Log changes in detection for better production monitoring
-          if (count !== lastScoreLogRef.current) {
-            console.log(`[ACM] Detected Faces: ${count}`);
-            lastScoreLogRef.current = count;
+        // Strategy: Performance first, Fallback accurate
+        if (native) {
+          try {
+            const faces = await native.detect(video);
+            found = faces.length;
+          } catch {}
+        }
+
+        if (found < 0 && faceapi) {
+          try {
+            const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({
+              inputSize: 512, // High resolution for small background faces
+              scoreThreshold: 0.35
+            }));
+            found = detections.length;
+          } catch {}
+        }
+
+        if (found >= 0) {
+          if (found !== lastLogEntry.current) {
+            console.log(`[ACM] Face Count: ${found}`);
+            lastLogEntry.current = found;
           }
 
-          // Maintain sliding window buffer
-          faceHistoryRef.current.push(count);
-          if (faceHistoryRef.current.length > DETECTION_BUFFER_SIZE) {
-            faceHistoryRef.current.shift();
+          // Buffer management
+          detectionBuffer.current.push(found);
+          if (detectionBuffer.current.length > WINDOW_SIZE) detectionBuffer.current.shift();
+
+          const buf = detectionBuffer.current;
+          if (buf.length < 3) return;
+
+          // DETERMINISTIC LOGIC:
+          // We use a high-confidence threshold: 
+          // MULTI: If 2+ faces are detected in more than 30% of recent frames (at least 2 of 5)
+          const multiCount = buf.filter(c => c >= 2).length;
+          if (multiCount >= 2) {
+            detectionBuffer.current = [1]; // Reset with a 'clean' frame to prevent repeat triggers
+            triggerViolation("multi_face_detected", { faceCount: found });
+            return;
           }
 
-          // Evaluate integrity based on the buffer
-          const buffer = faceHistoryRef.current;
-          if (buffer.length < 3) return; // Wait for buffer to prime
-
-          // Integrity Check 1: Multiple Faces
-          // If 2+ faces appear in at least 40% (2 out of 5) of the recent checks
-          const multiFaceFrames = buffer.filter(c => c >= 2).length;
-          if (multiFaceFrames >= 2) {
-            faceHistoryRef.current = []; // Clear buffer to prevent spamming
-            await sendEvent("multi_face_detected", { faceCount: count });
-          }
-
-          // Integrity Check 2: No Face
-          // If 0 faces appear in 80% (4 out of 5) of the recent checks
-          const noFaceFrames = buffer.filter(c => c === 0).length;
-          if (noFaceFrames >= 4) {
-            faceHistoryRef.current = []; // Clear buffer to prevent spamming
-            await sendEvent("no_face_detected");
+          // NO FACE: Requires sustained absence (at least 4 of 5 frames)
+          const noCount = buf.filter(c => c === 0).length;
+          if (noCount >= 4) {
+            detectionBuffer.current = [1];
+            triggerViolation("no_face_detected");
+            return;
           }
         }
-      }, FACE_CHECK_INTERVAL_MS);
+      }, CHECK_INTERVAL_MS);
     };
 
-    startDetection();
+    start();
     return () => {
-      isMounted = false;
-      if (intervalId) clearInterval(intervalId);
+      isActive = false;
+      if (loopId) clearInterval(loopId);
     };
-  }, [videoRef, isCompleted]);
+  }, [videoRef, isCompleted, triggerViolation]);
 
   return null;
 };
