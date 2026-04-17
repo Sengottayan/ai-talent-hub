@@ -1,6 +1,6 @@
 /**
- * AntiCheatingMonitor — 100% Production-Grade Proctoring System
- * Built for high accuracy, low latency, and maximum reliability in production environments.
+ * AntiCheatingMonitor — Highly Optimized Production-Grade Proctoring
+ * Enhanced for rapid detection and minimal latency.
  */
 
 import { useEffect, useRef, useCallback } from "react";
@@ -9,10 +9,10 @@ import api from "@/lib/api";
 import { logger } from "@/lib/logger";
 
 // ─── Configuration ────────────────────────────────────────────────────────────
-const GRACE_PERIOD_MS = 6000;          // 6s grace period
-const CHECK_INTERVAL_MS = 1500;       // Detection every 1.5s
+const GRACE_PERIOD_MS = 5000;          // 5s initial grace
+const CHECK_INTERVAL_MS = 1000;       // Faster polling (1 frame per second)
 const COOLDOWN_MS = 15000;            // 15s between backend events
-const WINDOW_SIZE = 5;                // Buffer of last 5 frames
+const WINDOW_SIZE = 5;                // Rolling history
 
 interface AntiCheatingMonitorProps {
   interviewId: string;
@@ -75,11 +75,11 @@ const AntiCheatingMonitor: React.FC<AntiCheatingMonitorProps> = ({
     if (now - lastFired < COOLDOWN_MS) return;
     lastEventFiredAt.current[type] = now;
 
-    // ─── Phase A: UI Feedback (Immediate) ───────────────────────────────────
+    // ─── Phase A: UI Feedback (Instant) ───────────────────────────────────
     const messages: Record<string, { title: string; desc: string }> = {
       multi_face_detected: {
         title: "⚠️ MULTIPLE PEOPLE DETECTED",
-        desc: "Security alert: More than one person visible. This is a severe violation."
+        desc: "Security alert: More than one person visible. This is recorded in the monitor log."
       },
       no_face_detected: {
         title: "⚠️ FACE NOT DETECTED",
@@ -97,7 +97,7 @@ const AntiCheatingMonitor: React.FC<AntiCheatingMonitorProps> = ({
 
     const alert = messages[type] || { title: "⚠️ INTEGRITY WARNING", desc: "Suspicious activity detected." };
     
-    // Use fixed IDs to prevent toast overlap/spam
+    // Stable ID to prevent overlap
     toast.error(alert.title, {
       id: `ac-violation-${type}`,
       description: alert.desc,
@@ -149,7 +149,6 @@ const AntiCheatingMonitor: React.FC<AntiCheatingMonitorProps> = ({
       if (document.visibilityState === "hidden") triggerViolation("visibility_hidden");
     };
     const onBlur = () => {
-      // Check if tab is still visible (if hidden, visibility event handles it)
       setTimeout(() => {
         if (!isUnloading.current && document.visibilityState === "visible") {
           triggerViolation("window_blur");
@@ -189,7 +188,7 @@ const AntiCheatingMonitor: React.FC<AntiCheatingMonitorProps> = ({
           const v = videoRef.current;
           if (!isActive) { clearInterval(check); res(); return; }
           if (v && v.readyState >= 2 && v.videoWidth > 0) { clearInterval(check); res(); }
-        }, 500);
+        }, 300); // Fast poller for video load
       });
 
       if (!isActive) return;
@@ -213,7 +212,7 @@ const AntiCheatingMonitor: React.FC<AntiCheatingMonitorProps> = ({
         if (found < 0 && faceapi) {
           try {
             const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({
-              inputSize: 512, // High resolution for small background faces
+              inputSize: 416, // Optimized size for speed + accuracy
               scoreThreshold: 0.35
             }));
             found = detections.length;
@@ -226,27 +225,28 @@ const AntiCheatingMonitor: React.FC<AntiCheatingMonitorProps> = ({
             lastLogEntry.current = found;
           }
 
-          // Buffer management
           detectionBuffer.current.push(found);
           if (detectionBuffer.current.length > WINDOW_SIZE) detectionBuffer.current.shift();
 
           const buf = detectionBuffer.current;
-          if (buf.length < 3) return;
+          // Minimum buffer to start making decisions
+          if (buf.length < 2) return;
 
-          // DETERMINISTIC LOGIC:
-          // We use a high-confidence threshold: 
-          // MULTI: If 2+ faces are detected in more than 30% of recent frames (at least 2 of 5)
-          const multiCount = buf.filter(c => c >= 2).length;
+          // DETERMINISTIC FAST-TRACK LOGIC:
+          
+          // MULTI: Highly sensitive. If 2+ faces in 2 out of recent 3 frames.
+          const recentBuf = buf.slice(-3);
+          const multiCount = recentBuf.filter(c => c >= 2).length;
           if (multiCount >= 2) {
-            detectionBuffer.current = [1]; // Reset with a 'clean' frame to prevent repeat triggers
+            detectionBuffer.current = [1, 1, 1]; // Reset
             triggerViolation("multi_face_detected", { faceCount: found });
             return;
           }
 
-          // NO FACE: Requires sustained absence (at least 4 of 5 frames)
+          // NO FACE: Robust check to avoid false positives. 4 of last 5 frames.
           const noCount = buf.filter(c => c === 0).length;
           if (noCount >= 4) {
-            detectionBuffer.current = [1];
+            detectionBuffer.current = [1, 1, 1, 1, 1];
             triggerViolation("no_face_detected");
             return;
           }
