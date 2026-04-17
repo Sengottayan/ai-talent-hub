@@ -1,18 +1,23 @@
 /**
- * AntiCheatingMonitor — Highly Optimized Production-Grade Proctoring
- * Enhanced for rapid detection and minimal latency.
+ * AntiCheatingMonitor — Enhanced AI Proctoring
+ * Uses MediaPipe for robust face (profile/partial) and person (body/intrusion) detection.
  */
 
 import { useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import api from "@/lib/api";
-import { logger } from "@/lib/logger";
+import { FaceDetector, ObjectDetector, FilesetResolver } from "@mediapipe/tasks-vision";
 
 // ─── Configuration ────────────────────────────────────────────────────────────
-const GRACE_PERIOD_MS = 5000;          // 5s initial grace
-const CHECK_INTERVAL_MS = 1000;       // Faster polling (1 frame per second)
-const COOLDOWN_MS = 15000;            // 15s between backend events
-const WINDOW_SIZE = 5;                // Rolling history
+const GRACE_PERIOD_MS = 5000;
+const CHECK_INTERVAL_MS = 1000;
+const COOLDOWN_MS = 15000;
+const WINDOW_SIZE = 5;
+
+// Discovery URLs for MediaPipe WASM and Models
+const VISION_WASM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.34/wasm";
+const FACE_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite";
+const OBJECT_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float16/1/efficientdet_lite0.tflite";
 
 interface AntiCheatingMonitorProps {
   interviewId: string;
@@ -24,25 +29,38 @@ interface AntiCheatingMonitorProps {
   videoRef?: React.RefObject<HTMLVideoElement>;
 }
 
-type FaceApiModule = typeof import("face-api.js");
+// ─── Vision Engine Singleton ──────────────────────────────────────────────────
+let visionPromise: Promise<{ faceDetector: FaceDetector; objectDetector: ObjectDetector } | null> | null = null;
 
-// ─── Model Management ─────────────────────────────────────────────────────────
-let modelPromise: Promise<FaceApiModule | null> | null = null;
+const loadVisionEngines = (): Promise<{ faceDetector: FaceDetector; objectDetector: ObjectDetector } | null> => {
+  if (visionPromise) return visionPromise;
 
-const loadModels = (): Promise<FaceApiModule | null> => {
-  if (modelPromise) return modelPromise;
-  modelPromise = import("face-api.js")
-    .then(async (faceapi) => {
-      await faceapi.nets.tinyFaceDetector.loadFromUri("/models");
-      console.log("[ACM] ✅ Face Detection Engine Ready");
-      return faceapi as FaceApiModule;
-    })
-    .catch((err) => {
-      console.error("[ACM] ❌ Model Load Failure:", err);
-      modelPromise = null;
+  visionPromise = (async () => {
+    try {
+      const vision = await FilesetResolver.forVisionTasks(VISION_WASM_URL);
+      
+      const faceDetector = await FaceDetector.createFromOptions(vision, {
+        baseOptions: { modelAssetPath: FACE_MODEL_URL, delegate: "GPU" },
+        runningMode: "VIDEO",
+        minDetectionConfidence: 0.4
+      });
+
+      const objectDetector = await ObjectDetector.createFromOptions(vision, {
+        baseOptions: { modelAssetPath: OBJECT_MODEL_URL, delegate: "GPU" },
+        runningMode: "VIDEO",
+        scoreThreshold: 0.4,
+        maxResults: 5
+      });
+
+      console.log("[ACM] ✅ MediaPipe Vision Engines Ready");
+      return { faceDetector, objectDetector };
+    } catch (err) {
+      console.error("[ACM] ❌ Vision Init Failure:", err);
+      visionPromise = null;
       return null;
-    });
-  return modelPromise;
+    }
+  })();
+  return visionPromise;
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -54,32 +72,25 @@ const AntiCheatingMonitor: React.FC<AntiCheatingMonitorProps> = ({
   isCompleted = false,
   videoRef,
 }) => {
-  // Persistence Refs
   const isUnloading = useRef(false);
   const startTime = useRef(Date.now());
   const lastEventFiredAt = useRef<Record<string, number>>({});
-  
-  // Detection Buffer
   const detectionBuffer = useRef<number[]>([]);
-  const lastLogEntry = useRef<number>(-1);
+  const lastLogEntry = useRef<string>("");
 
-  // ─── 1. Backend Sync ───────────────────────────────────────────────────────
   const triggerViolation = useCallback(async (type: string, metadata: any = {}) => {
     if (isCompleted || isUnloading.current) return;
-    
     const now = Date.now();
     if (now - startTime.current < GRACE_PERIOD_MS) return;
 
-    // Cooldown check
     const lastFired = lastEventFiredAt.current[type] || 0;
     if (now - lastFired < COOLDOWN_MS) return;
     lastEventFiredAt.current[type] = now;
 
-    // ─── Phase A: UI Feedback (Instant) ───────────────────────────────────
     const messages: Record<string, { title: string; desc: string }> = {
       multi_face_detected: {
         title: "⚠️ MULTIPLE PEOPLE DETECTED",
-        desc: "Security alert: More than one person visible. This is recorded in the monitor log."
+        desc: "Security alert: More than one person or physical intrusion detected."
       },
       no_face_detected: {
         title: "⚠️ FACE NOT DETECTED",
@@ -96,17 +107,10 @@ const AntiCheatingMonitor: React.FC<AntiCheatingMonitorProps> = ({
     };
 
     const alert = messages[type] || { title: "⚠️ INTEGRITY WARNING", desc: "Suspicious activity detected." };
-    
-    // Stable ID to prevent overlap
-    toast.error(alert.title, {
-      id: `ac-violation-${type}`,
-      description: alert.desc,
-      duration: 8000,
-    });
+    toast.error(alert.title, { id: `ac-violation-${type}`, description: alert.desc, duration: 8000 });
 
-    console.log(`[ACM] → FIRING VIOLATION: ${type}`);
+    console.log(`[ACM] → FIRING VIOLATION: ${type}`, metadata);
 
-    // ─── Phase B: Persistence (Async) ───────────────────────────────────────
     try {
       const { data } = await api.post(`/interviews/anti-cheating-event`, {
         interview_id: interviewId,
@@ -120,10 +124,7 @@ const AntiCheatingMonitor: React.FC<AntiCheatingMonitorProps> = ({
       });
 
       if (data.interview_status === "auto_completed") {
-        toast.error("INTERVIEW TERMINATED", {
-          description: "Multiple integrity violations detected. Your session has ended.",
-          duration: 15000,
-        });
+        toast.error("INTERVIEW TERMINATED", { description: "Multiple violations detected.", duration: 15000 });
         onViolationLimitReached?.();
       }
     } catch (err) {
@@ -140,22 +141,11 @@ const AntiCheatingMonitor: React.FC<AntiCheatingMonitorProps> = ({
     } catch { return "00:00"; }
   };
 
-  // ─── 2. Browser Window Events ──────────────────────────────────────────────
   useEffect(() => {
     if (!interviewId || isCompleted) return;
-
     const onUnload = () => { isUnloading.current = true; };
-    const onVisibility = () => {
-      if (document.visibilityState === "hidden") triggerViolation("visibility_hidden");
-    };
-    const onBlur = () => {
-      setTimeout(() => {
-        if (!isUnloading.current && document.visibilityState === "visible") {
-          triggerViolation("window_blur");
-        }
-      }, 500);
-    };
-
+    const onVisibility = () => { if (document.visibilityState === "hidden") triggerViolation("visibility_hidden"); };
+    const onBlur = () => { setTimeout(() => { if (!isUnloading.current && document.visibilityState === "visible") triggerViolation("window_blur"); }, 500); };
     window.addEventListener("beforeunload", onUnload);
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("blur", onBlur);
@@ -166,90 +156,81 @@ const AntiCheatingMonitor: React.FC<AntiCheatingMonitorProps> = ({
     };
   }, [interviewId, isCompleted, triggerViolation]);
 
-  // ─── 3. Professional Face Detection Loop ──────────────────────────────────
   useEffect(() => {
     if (!videoRef || isCompleted) return;
     let loopId: any = null;
     let isActive = true;
 
     const start = async () => {
-      // Initialize engines
-      let native: any = null;
-      if (typeof window !== "undefined" && "FaceDetector" in window) {
-        try { native = new (window as any).FaceDetector({ fastMode: false, maxDetectedFaces: 5 }); } catch {}
-      }
-      
-      const faceapi = await loadModels();
-      if (!faceapi && !native) return;
+      const engines = await loadVisionEngines();
+      if (!engines) return;
+      const { faceDetector, objectDetector } = engines;
 
-      // Sync with video readiness
       await new Promise<void>((res) => {
         const check = setInterval(() => {
           const v = videoRef.current;
           if (!isActive) { clearInterval(check); res(); return; }
           if (v && v.readyState >= 2 && v.videoWidth > 0) { clearInterval(check); res(); }
-        }, 300); // Fast poller for video load
+        }, 300);
       });
 
       if (!isActive) return;
-      console.log("[ACM] Monitoring Loop Active");
+      console.log("[ACM] Enhanced Monitoring Active");
 
       loopId = setInterval(async () => {
         if (!isActive || isCompleted || isUnloading.current) return;
         const video = videoRef.current;
         if (!video) return;
 
-        let found = -1;
-        
-        // Strategy: Performance first, Fallback accurate
-        if (native) {
-          try {
-            const faces = await native.detect(video);
-            found = faces.length;
-          } catch {}
-        }
+        try {
+          // 1. Concurrent Detection
+          const faceResult = faceDetector.detectForVideo(video, Date.now());
+          const objectResult = objectDetector.detectForVideo(video, Date.now());
 
-        if (found < 0 && faceapi) {
-          try {
-            const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({
-              inputSize: 416, // Optimized size for speed + accuracy
-              scoreThreshold: 0.35
-            }));
-            found = detections.length;
-          } catch {}
-        }
+          const faceCount = faceResult.detections.length;
+          // Filter object results for "person" (ID 0 in COCO-SSD)
+          const personCount = objectResult.detections.filter(d => 
+            d.categories.some(c => c.categoryName === "person" || c.index === 0)
+          ).length;
 
-        if (found >= 0) {
-          if (found !== lastLogEntry.current) {
-            console.log(`[ACM] Face Count: ${found}`);
-            lastLogEntry.current = found;
+          const summary = `Faces: ${faceCount}, Persons: ${personCount}`;
+          if (summary !== lastLogEntry.current) {
+            console.log(`[ACM] ${summary}`);
+            lastLogEntry.current = summary;
           }
 
-          detectionBuffer.current.push(found);
+          // 2. Aggregate Signal for Multi-Presence
+          // We prioritize Person count for intrusion, Face count for profile stability
+          const aggregateMulti = Math.max(faceCount, personCount);
+          detectionBuffer.current.push(aggregateMulti);
           if (detectionBuffer.current.length > WINDOW_SIZE) detectionBuffer.current.shift();
 
           const buf = detectionBuffer.current;
-          // Minimum buffer to start making decisions
           if (buf.length < 2) return;
 
-          // DETERMINISTIC FAST-TRACK LOGIC:
+          // VIOLATION LOGIC
           
-          // MULTI: Highly sensitive. If 2+ faces in 2 out of recent 3 frames.
+          // MULTI: If 2+ humans detected in 2 of last 3 frames
           const recentBuf = buf.slice(-3);
-          const multiCount = recentBuf.filter(c => c >= 2).length;
-          if (multiCount >= 2) {
-            detectionBuffer.current = [1, 1, 1]; // Reset
-            triggerViolation("multi_face_detected", { faceCount: found });
+          const multiTriggered = recentBuf.filter(c => c >= 2).length >= 2;
+          if (multiTriggered) {
+            detectionBuffer.current = [1, 1, 1];
+            triggerViolation("multi_face_detected", { faceCount, personCount });
             return;
           }
 
-          // NO FACE: Robust check to avoid false positives. 4 of last 5 frames.
-          const noCount = buf.filter(c => c === 0).length;
-          if (noCount >= 4) {
+          // NO FACE: Based specifically on Face Detector. 4 of last 5 frames.
+          // We allow Person to be present, but we REQUIRE a Face for proctoring.
+          const noFaceRun = buf.length >= WINDOW_SIZE && faceCount === 0; 
+          // Note: The logic below is a bit simpler for "No Face" to be reactive but stable
+          const noFaceCount = buf.filter(c => c === 0).length;
+          if (noFaceCount >= 4 && faceCount === 0) {
             detectionBuffer.current = [1, 1, 1, 1, 1];
             triggerViolation("no_face_detected");
             return;
           }
+        } catch (err) {
+          console.error("[ACM] Detection frame dropped:", err);
         }
       }, CHECK_INTERVAL_MS);
     };
