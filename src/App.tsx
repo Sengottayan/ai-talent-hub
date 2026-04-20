@@ -24,6 +24,7 @@ import CandidateMock from "./pages/candidate/CandidateMock";
 import CandidateSkills from "./pages/candidate/CandidateSkills";
 import CandidateSettings from "./pages/candidate/CandidateSettings";
 import InterviewSession from "./pages/candidate/InterviewSession";
+import ProtectedRoute from "./components/auth/ProtectedRoute";
 
 // New Voice Interview Pages
 import CandidateInterviewJoin from "./pages/CandidateInterviewJoin";
@@ -49,31 +50,35 @@ const App = () => (
             <Route path="/signup" element={<Signup />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
 
-            {/* HR Admin Routes */}
-            <Route path="/hr" element={<DashboardLayout />}>
-              <Route index element={<Navigate to="dashboard" replace />} />
-              <Route path="dashboard" element={<Dashboard />} />
-              <Route path="upload" element={<ResumeUpload />} />
-              <Route path="shortlisted" element={<ShortlistedCandidates />} />
-              <Route path="interviews" element={<Interviews />} />
-              <Route path="reschedule" element={<RescheduleRequests />} />
-              <Route path="results" element={<InterviewResults />} />
-              <Route path="settings" element={<HRSettings />} />
+            {/* HR Admin Routes (Protected) */}
+            <Route element={<ProtectedRoute allowedRole="recruiter" />}>
+              <Route path="/hr" element={<DashboardLayout />}>
+                <Route index element={<Navigate to="dashboard" replace />} />
+                <Route path="dashboard" element={<Dashboard />} />
+                <Route path="upload" element={<ResumeUpload />} />
+                <Route path="shortlisted" element={<ShortlistedCandidates />} />
+                <Route path="interviews" element={<Interviews />} />
+                <Route path="reschedule" element={<RescheduleRequests />} />
+                <Route path="results" element={<InterviewResults />} />
+                <Route path="settings" element={<HRSettings />} />
+              </Route>
             </Route>
 
-            {/* Candidate Routes */}
-            <Route element={<CandidateLayout />}>
-              <Route
-                path="/candidate/dashboard"
-                element={<CandidateDashboard />}
-              />
-              <Route path="/candidate/resume" element={<CandidateResume />} />
-              <Route path="/candidate/mock" element={<CandidateMock />} />
-              <Route path="/candidate/skills" element={<CandidateSkills />} />
-              <Route
-                path="/candidate/settings"
-                element={<CandidateSettings />}
-              />
+            {/* Candidate Routes (Protected) */}
+            <Route element={<ProtectedRoute allowedRole="candidate" />}>
+              <Route element={<CandidateLayout />}>
+                <Route
+                  path="/candidate/dashboard"
+                  element={<CandidateDashboard />}
+                />
+                <Route path="/candidate/resume" element={<CandidateResume />} />
+                <Route path="/candidate/mock" element={<CandidateMock />} />
+                <Route path="/candidate/skills" element={<CandidateSkills />} />
+                <Route
+                  path="/candidate/settings"
+                  element={<CandidateSettings />}
+                />
+              </Route>
             </Route>
 
             {/* New Voice Interview Routes */}
