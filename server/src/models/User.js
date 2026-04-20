@@ -19,6 +19,16 @@ const userSchema = mongoose.Schema({
         type: String,
         required: true,
         enum: ['candidate', 'recruiter', 'admin'],
+    },
+    company: {
+        type: String,
+        default: "",
+    },
+    otp: {
+        type: String,
+    },
+    otpExpires: {
+        type: Date,
     }
 }, {
     timestamps: true,

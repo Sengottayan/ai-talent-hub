@@ -22,6 +22,12 @@ const recruiterSchema = mongoose.Schema({
     company: {
         type: String,
         default: "",
+    },
+    otp: {
+        type: String,
+    },
+    otpExpires: {
+        type: Date,
     }
 }, {
     timestamps: true,

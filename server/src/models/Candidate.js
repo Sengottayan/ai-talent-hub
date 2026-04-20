@@ -18,6 +18,12 @@ const candidateSchema = mongoose.Schema({
     role: {
         type: String,
         default: "candidate",
+    },
+    otp: {
+        type: String,
+    },
+    otpExpires: {
+        type: Date,
     }
 }, {
     timestamps: true,

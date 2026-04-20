@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const Candidate = require('../models/Candidate');
 const Recruiter = require('../models/Recruiter');
 const User = require('../models/User');
+const { sendMailNodemailer } = require('../utils/sendMailNodemailer');
 
 const generateToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -74,31 +75,99 @@ const loginUser = async (req, res) => {
         const emailRegex = new RegExp(`^${email}$`, 'i');
         let user = null;
         let role = null;
-        let redirect_url = null;
 
         // 1. Try to find in Recruiter collection
         user = await Recruiter.findOne({ email: emailRegex });
         if (user && (await user.matchPassword(password))) {
             role = 'recruiter';
-            redirect_url = '/hr/dashboard';
         } else {
             // 2. Try to find in Candidate collection
             user = await Candidate.findOne({ email: emailRegex });
             if (user && (await user.matchPassword(password))) {
                 role = 'candidate';
-                redirect_url = '/candidate/dashboard';
             } else {
                 // 3. Try User collection (General / Admin)
                 user = await User.findOne({ email: emailRegex });
                 if (user && (await user.matchPassword(password))) {
                     role = user.role;
-                    redirect_url = role === 'admin' ? '/admin/dashboard' : (role === 'recruiter' ? '/hr/dashboard' : '/candidate/dashboard');
                 } else {
                     console.log(`Login failed for ${email}: Invalid credentials`);
                     return res.status(401).json({ message: 'Invalid email or password' });
                 }
             }
         }
+
+        // Generate 6-digit OTP
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        user.otp = otp;
+        user.otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+        await user.save();
+
+        // Send OTP Email using the template style from interviewStatusController
+        const html = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
+                <h3 style="color: #333;">Login Verification Code</h3>
+                <p style="color: #666;">Your verification code for logging into HireAI is:</p>
+                <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0;">
+                    <h1 style="color: #2563eb; font-size: 32px; letter-spacing: 5px; margin: 0;">${otp}</h1>
+                </div>
+                <p style="color: #666;">This code will expire in 10 minutes.</p>
+                <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+                <p style="color: #999; font-size: 12px;">If you did not request this code, please ignore this email.</p>
+            </div>
+        `;
+
+        const emailResult = await sendMailNodemailer(
+            user.email,
+            `Your Login Verification Code: ${otp}`,
+            html
+        );
+
+        if (emailResult.success) {
+            res.json({
+                success: true,
+                otp_required: true,
+                email: user.email,
+                message: 'OTP sent to your email.'
+            });
+        } else {
+            console.error('Failed to send OTP:', emailResult.error);
+            res.status(500).json({ success: false, message: 'Failed to send OTP email.' });
+        }
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+const verifyLoginOtp = async (req, res) => {
+    const { email, otp } = req.body;
+    console.log(`OTP Verification attempt for: ${email}`);
+
+    try {
+        const emailRegex = new RegExp(`^${email}$`, 'i');
+        let user = await Recruiter.findOne({ email: emailRegex }) || 
+                   await Candidate.findOne({ email: emailRegex }) || 
+                   await User.findOne({ email: emailRegex });
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        if (!user.otp || user.otp !== otp) {
+            return res.status(400).json({ message: 'Invalid verification code' });
+        }
+
+        if (new Date() > user.otpExpires) {
+            return res.status(400).json({ message: 'Verification code expired' });
+        }
+
+        // Clear OTP after success
+        user.otp = undefined;
+        user.otpExpires = undefined;
+        await user.save();
+
+        const role = user.role;
+        const redirect_url = role === 'admin' ? '/admin/dashboard' : (role === 'recruiter' ? '/hr/dashboard' : '/candidate/dashboard');
 
         res.json({
             user_id: user._id,
@@ -241,4 +310,4 @@ const updateProfile = async (req, res) => {
     }
 };
 
-module.exports = { registerUser, loginUser, getUsers, deleteUser, resetPassword, updatePassword, updateProfile };
+module.exports = { registerUser, loginUser, verifyLoginOtp, getUsers, deleteUser, resetPassword, updatePassword, updateProfile };

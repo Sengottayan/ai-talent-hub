@@ -1,11 +1,12 @@
 const express = require('express');
 const router = express.Router();
 console.log('Auth routes file loading...');
-const { registerUser, loginUser, getUsers, deleteUser, resetPassword, updatePassword, updateProfile } = require('../controllers/authController');
+const { registerUser, loginUser, verifyLoginOtp, getUsers, deleteUser, resetPassword, updatePassword, updateProfile } = require('../controllers/authController');
 const { protect } = require('../middleware/authMiddleware');
 
 router.post('/signup', registerUser);
 router.post('/login', loginUser);
+router.post('/verify-otp', verifyLoginOtp);
 router.post('/reset-password', resetPassword);
 router.post('/update-password', protect, updatePassword);
 router.put('/update-profile', protect, updateProfile);
