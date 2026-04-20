@@ -10,6 +10,7 @@ import {
   Mail,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -189,13 +190,7 @@ export default function RescheduleRequests() {
     currentPage * itemsPerPage,
   );
 
-  if (isLoading) {
-    return (
-      <div className="flex h-[60vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+  // Removed full-page loader to use inline skeletons for a better UX
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -223,65 +218,96 @@ export default function RescheduleRequests() {
 
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardContent className="flex items-center gap-4 p-6">
-            <div className="rounded-lg bg-warning/10 p-3">
-              <Clock className="h-6 w-6 text-warning" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-foreground">
-                {pendingRequests.length}
-              </p>
-              <p className="text-sm text-muted-foreground">Pending Review</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="flex items-center gap-4 p-6">
-            <div className="rounded-lg bg-blue-500/10 p-3">
-              <RefreshCw className="h-6 w-6 text-blue-500" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-foreground">
-                {requests.filter((r) => r.status === "Processing").length}
-              </p>
-              <p className="text-sm text-muted-foreground">Processing</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="flex items-center gap-4 p-6">
-            <div className="rounded-lg bg-success/10 p-3">
-              <Check className="h-6 w-6 text-success" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-foreground">
-                {
-                  requests.filter((r) =>
-                    ["Approved", "Confirmed"].includes(r.status),
-                  ).length
-                }
-              </p>
-              <p className="text-sm text-muted-foreground">Approved</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="flex items-center gap-4 p-6">
-            <div className="rounded-lg bg-destructive/10 p-3">
-              <X className="h-6 w-6 text-destructive" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-foreground">
-                {requests.filter((r) => r.status === "Rejected").length}
-              </p>
-              <p className="text-sm text-muted-foreground">Rejected</p>
-            </div>
-          </CardContent>
-        </Card>
+        {isLoading ? (
+          [...Array(4)].map((_, i) => (
+            <Card key={i} className="animate-pulse">
+              <CardContent className="flex items-center gap-4 p-6">
+                <Skeleton className="h-12 w-12 rounded-lg bg-slate-100" />
+                <div className="space-y-2">
+                  <Skeleton className="h-6 w-8 bg-slate-200" />
+                  <Skeleton className="h-4 w-24 bg-slate-100" />
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        ) : (
+          <>
+            <Card>
+              <CardContent className="flex items-center gap-4 p-6">
+                <div className="rounded-lg bg-warning/10 p-3">
+                  <Clock className="h-6 w-6 text-warning" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-foreground">
+                    {pendingRequests.length}
+                  </p>
+                  <p className="text-sm text-muted-foreground">Pending Review</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="flex items-center gap-4 p-6">
+                <div className="rounded-lg bg-blue-500/10 p-3">
+                  <RefreshCw className="h-6 w-6 text-blue-500" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-foreground">
+                    {requests.filter((r) => r.status === "Processing").length}
+                  </p>
+                  <p className="text-sm text-muted-foreground">Processing</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="flex items-center gap-4 p-6">
+                <div className="rounded-lg bg-success/10 p-3">
+                  <Check className="h-6 w-6 text-success" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-foreground">
+                    {
+                      requests.filter((r) =>
+                        ["Approved", "Confirmed"].includes(r.status),
+                      ).length
+                    }
+                  </p>
+                  <p className="text-sm text-muted-foreground">Approved</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="flex items-center gap-4 p-6">
+                <div className="rounded-lg bg-destructive/10 p-3">
+                  <X className="h-6 w-6 text-destructive" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-foreground">
+                    {requests.filter((r) => r.status === "Rejected").length}
+                  </p>
+                  <p className="text-sm text-muted-foreground">Rejected</p>
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
 
-      <Tabs defaultValue="pending" className="w-full">
+      {isLoading ? (
+        <div className="space-y-6">
+          <Skeleton className="h-10 w-[400px] bg-slate-100" />
+          <Card className="animate-pulse">
+            <CardHeader>
+              <Skeleton className="h-6 w-48 bg-slate-200" />
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {[...Array(3)].map((_, i) => (
+                <Skeleton key={i} className="h-40 w-full bg-slate-50 rounded-xl" />
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
+        <Tabs defaultValue="pending" className="w-full">
         <TabsList className="grid w-full grid-cols-2 max-w-[400px]">
           <TabsTrigger value="pending" className="flex items-center gap-2">
             Pending{" "}
@@ -577,6 +603,7 @@ export default function RescheduleRequests() {
           )}
         </TabsContent>
       </Tabs>
+      )}
     </div>
   );
 }
