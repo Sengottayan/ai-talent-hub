@@ -268,50 +268,90 @@ export default function InterviewResults() {
 
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardContent className="flex items-center gap-4 p-6">
-            <div className="rounded-lg bg-warning/10 p-3">
-              <Star className="h-6 w-6 text-warning" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-foreground">
-                {pendingCount}
-              </p>
-              <p className="text-sm text-muted-foreground">Pending Decision</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="flex items-center gap-4 p-6">
-            <div className="rounded-lg bg-success/10 p-3">
-              <Award className="h-6 w-6 text-success" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-foreground">
-                {selectedCount}
-              </p>
-              <p className="text-sm text-muted-foreground">Selected</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="flex items-center gap-4 p-6">
-            <div className="rounded-lg bg-destructive/10 p-3">
-              <XCircle className="h-6 w-6 text-destructive" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-foreground">
-                {rejectedCount}
-              </p>
-              <p className="text-sm text-muted-foreground">Rejected</p>
-            </div>
-          </CardContent>
-        </Card>
+        {isLoading ? (
+          [...Array(3)].map((_, i) => (
+            <Card key={i} className="animate-pulse">
+              <CardContent className="flex items-center gap-4 p-6">
+                <Skeleton className="h-12 w-12 rounded-lg bg-slate-100" />
+                <div className="space-y-2">
+                  <Skeleton className="h-6 w-8 bg-slate-200" />
+                  <Skeleton className="h-4 w-24 bg-slate-100" />
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        ) : (
+          <>
+            <Card>
+              <CardContent className="flex items-center gap-4 p-6">
+                <div className="rounded-lg bg-warning/10 p-3">
+                  <Star className="h-6 w-6 text-warning" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-foreground">
+                    {pendingCount}
+                  </p>
+                  <p className="text-sm text-muted-foreground">Pending Decision</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="flex items-center gap-4 p-6">
+                <div className="rounded-lg bg-success/10 p-3">
+                  <Award className="h-6 w-6 text-success" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-foreground">
+                    {selectedCount}
+                  </p>
+                  <p className="text-sm text-muted-foreground">Selected</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="flex items-center gap-4 p-6">
+                <div className="rounded-lg bg-destructive/10 p-3">
+                  <XCircle className="h-6 w-6 text-destructive" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-foreground">
+                    {rejectedCount}
+                  </p>
+                  <p className="text-sm text-muted-foreground">Rejected</p>
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
 
       {/* Results */}
       <div className="space-y-6 pb-12">
-        {results.length > 0 ? (
+        {isLoading ? (
+          [...Array(2)].map((_, i) => (
+            <Card key={i} className="overflow-hidden border-border shadow-sm">
+              <CardHeader className="border-b border-border bg-muted/20">
+                <div className="flex items-center gap-4">
+                  <Skeleton className="h-14 w-14 rounded-full bg-slate-200" />
+                  <div className="space-y-2 flex-1">
+                    <Skeleton className="h-6 w-48 bg-slate-200" />
+                    <Skeleton className="h-4 w-64 bg-slate-100" />
+                  </div>
+                  <Skeleton className="h-12 w-24 bg-slate-200" />
+                </div>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="grid gap-8 lg:grid-cols-2">
+                  <Skeleton className="h-80 w-full bg-slate-50 rounded-xl" />
+                  <div className="space-y-4">
+                    <Skeleton className="h-32 w-full bg-slate-50 rounded-xl" />
+                    <Skeleton className="h-40 w-full bg-slate-50 rounded-xl" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        ) : results.length > 0 ? (
           results.map((result) => (
             <Card
               key={result._id}
